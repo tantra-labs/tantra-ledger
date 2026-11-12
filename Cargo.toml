@@ -1,12 +1,12 @@
 [workspace]
 resolver = "2"
 members = [
-  "crates/vyapaar-ledger",
-  "crates/vyapaar-ledger-oms",
-  "crates/vyapaar-ledger-portfolio",
-  "crates/vyapaar-ledger-journal",
-  "crates/vyapaar-ledger-allocation",
-  "crates/vyapaar-ledger-performance",
+  "crates/tantra-ledger",
+  "crates/tantra-ledger-oms",
+  "crates/tantra-ledger-portfolio",
+  "crates/tantra-ledger-journal",
+  "crates/tantra-ledger-allocation",
+  "crates/tantra-ledger-performance",
 ]
 
 [workspace.package]
@@ -14,20 +14,20 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 license = "AGPL-3.0"
-repository = "https://github.com/vyapaar-labs/vyapaar-ledger"
+repository = "https://github.com/tantra-labs/tantra-ledger"
 
 # Zero-I/O dependency policy: no tokio, no tracing, no async runtime — every
 # member of this workspace is a pure, synchronous domain library. Temporal
 # determinism is enforced by passing `now: DateTime<Utc>` explicitly instead of
 # calling `Utc::now()` inside the domain.
 [workspace.dependencies]
-vyapaar-core = { path = "../vyapaar-core" }
-vyapaar-ledger = { path = "crates/vyapaar-ledger" }
-vyapaar-ledger-oms = { path = "crates/vyapaar-ledger-oms" }
-vyapaar-ledger-portfolio = { path = "crates/vyapaar-ledger-portfolio" }
-vyapaar-ledger-journal = { path = "crates/vyapaar-ledger-journal" }
-vyapaar-ledger-allocation = { path = "crates/vyapaar-ledger-allocation" }
-vyapaar-ledger-performance = { path = "crates/vyapaar-ledger-performance" }
+tantra-core = { path = "../tantra-core" }
+tantra-ledger = { path = "crates/tantra-ledger" }
+tantra-ledger-oms = { path = "crates/tantra-ledger-oms" }
+tantra-ledger-portfolio = { path = "crates/tantra-ledger-portfolio" }
+tantra-ledger-journal = { path = "crates/tantra-ledger-journal" }
+tantra-ledger-allocation = { path = "crates/tantra-ledger-allocation" }
+tantra-ledger-performance = { path = "crates/tantra-ledger-performance" }
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 rust_decimal = { version = "1", features = ["serde-with-str"] }

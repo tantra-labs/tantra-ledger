@@ -4,7 +4,7 @@
 
 ## What's Declared but Missing
 
-`crates/vyapaar-ledger-allocation/src/lib.rs` declares
+`crates/tantra-ledger-allocation/src/lib.rs` declares
 `AllocationObjective::Hrp` ("Hierarchical Risk Parity — Phase 2") as a first-class
 serde enum variant, but `optimize()` returns
 `AllocationError::NotImplemented("Hierarchical Risk Parity is a Phase 2 objective")`

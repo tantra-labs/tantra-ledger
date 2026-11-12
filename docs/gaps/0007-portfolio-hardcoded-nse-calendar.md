@@ -4,7 +4,7 @@
 
 ## What's Hardcoded
 
-`crates/vyapaar-ledger-portfolio/src/lib.rs`:
+`crates/tantra-ledger-portfolio/src/lib.rs`:
 
 - `ClearingCalendar::new()` seeds a hardcoded NSE trading-holiday table for
   **2024, 2025, and 2026** inside the domain crate
@@ -18,7 +18,7 @@
 ## Why
 
 - Holiday data is reference data, not domain logic: it belongs in a data
-  provider (e.g. `vyapaar-data`, whose calendar gaps are filed there) rather
+  provider (e.g. `tantra-data`, whose calendar gaps are filed there) rather
   than being frozen into a domain crate every year.
 - A static table silently goes stale (new Muhurat sessions, one-off closures),
   and a second copy of the same table risks drift (`with_holidays` doc notes
@@ -30,7 +30,7 @@
   documented test fixture).
 2. Make `ClearingCalendar::new()` construct an empty calendar (weekend
   exclusion only), with real holidays always injected via `with_holidays`.
-3. Ensure the backtest `NseTradingCalendar` (or `vyapaar-data`) seeds the real
+3. Ensure the backtest `NseTradingCalendar` (or `tantra-data`) seeds the real
   table, citing this gap.
 4. Keep the existing `clearing_calendar_injection_tests.rs` behavior and extend
   it for empty defaults.
@@ -38,4 +38,4 @@
 ## Verification
 
 `cargo test --workspace --profile prod` green; `grep -rn "2024\|2025\|2026"
-crates/vyapaar-ledger-portfolio/src/lib.rs` returns no holiday table.
+crates/tantra-ledger-portfolio/src/lib.rs` returns no holiday table.

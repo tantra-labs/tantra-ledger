@@ -1,6 +1,6 @@
-# `vyapaar-ledger-portfolio` — FIFO Tax-Lot Portfolio Reference
+# `tantra-ledger-portfolio` — FIFO Tax-Lot Portfolio Reference
 
-Documents `crates/vyapaar-ledger-portfolio/src/lib.rs`: the FIFO tax-lot engine,
+Documents `crates/tantra-ledger-portfolio/src/lib.rs`: the FIFO tax-lot engine,
 Indian T+1 Demat settlement, corporate actions, and portfolio valuation.
 
 ## `AccountState`
@@ -69,9 +69,9 @@ positions and marks always give a byte-identical snapshot.
 
 ## Related
 
-- `vyapaar-ledger/src/repository.rs` — `InMemoryPositionRepository` delegates
+- `tantra-ledger/src/repository.rs` — `InMemoryPositionRepository` delegates
   `match_lots` / `record_lot` to the `AccountState` aggregate.
-- `vyapaar-core/src/order.rs` — `FillReport` consumed as matching input.
-- `vyapaar-core/src/types.rs` — `Price`, `Quantity`, `Money`, `Currency`.
+- `tantra-core/src/order.rs` — `FillReport` consumed as matching input.
+- `tantra-core/src/types.rs` — `Price`, `Quantity`, `Money`, `Currency`.
 - Tests: `apply_fill_tests.rs` (7), `clearing_calendar_injection_tests.rs` (6),
   `unit_tests.rs` (23), plus `benches/portfolio_benchmarks.rs`.

@@ -1,4 +1,4 @@
-# Gap Index — `vyapaar-ledger`
+# Gap Index — `tantra-ledger`
 
 Per workspace rule `.agents/rules/gap-tracking.md`:
 - **Gaps** (`docs/gaps/XXXX-*.md`): individual missing features, stubs, or rule violations.

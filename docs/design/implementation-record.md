@@ -1,11 +1,11 @@
-# `vyapaar-ledger` — Implementation Record
+# `tantra-ledger` — Implementation Record
 
 Dismantled from the former `docs/roadmap/` (`roadmap.md` +
 `migration-verification.md`). Completed milestones are recorded here; remaining
 future work moved to [`docs/gaps/`](../gaps/README.md) and
 [`docs/plans/`](../plans/README.md).
 
-## Migration: `honba-kokoro` → `vyapaar-ledger` (Tier 1B)
+## Migration: `honba-kokoro` → `tantra-ledger` (Tier 1B)
 
 | Milestone | Status | Commit |
 |-----------|--------|--------|
@@ -21,8 +21,8 @@ The file-by-file mapping is in [`code-migration-map.md`](code-migration-map.md).
 
 | Crate | Landing | Commit(s) |
 |-------|---------|-----------|
-| `vyapaar-ledger-allocation` (mean-variance + risk parity, Phase 1) | Complete | `b35a314`, `436a2d8`, `53de244` |
-| `vyapaar-ledger-performance` (annotations, metrics, calendar, compare) | Complete | `b7d7fec`, `2a3a04e`, `1b7fb97` |
+| `tantra-ledger-allocation` (mean-variance + risk parity, Phase 1) | Complete | `b35a314`, `436a2d8`, `53de244` |
+| `tantra-ledger-performance` (annotations, metrics, calendar, compare) | Complete | `b7d7fec`, `2a3a04e`, `1b7fb97` |
 | Docs: per-crate code references + implementation record | Complete | this change |
 
 ## Verification (2026-11-12, `--profile prod`)

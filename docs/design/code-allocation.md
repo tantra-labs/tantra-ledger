@@ -1,9 +1,9 @@
-# `vyapaar-ledger-allocation` — Portfolio Allocation Reference
+# `tantra-ledger-allocation` — Portfolio Allocation Reference
 
-Documents `crates/vyapaar-ledger-allocation/src/lib.rs`: pure, zero-I/O,
+Documents `crates/tantra-ledger-allocation/src/lib.rs`: pure, zero-I/O,
 deterministic portfolio allocation producing `TargetWeights` (instrument →
 target weight mappings). It never places an order — a caller (eventually
-`vyapaar-exec` or a strategy layer) would turn the weights into orders.
+`tantra-exec` or a strategy layer) would turn the weights into orders.
 
 ## Phase 1 Scope
 
@@ -26,12 +26,12 @@ rejected with `AllocationError`.
 
 ## `PortfolioState` (read-adapter)
 
-Builds optimization input from `vyapaar-ledger-portfolio`:
+Builds optimization input from `tantra-ledger-portfolio`:
 
 - `from_portfolio(portfolio, marks, as_of)` — universe = union of held
   positions; `current_weights` = market-value-normalized weights.
 - `with_expected_returns()` / `with_covariance()` — attach estimates (from
-  `vyapaar_core::quant` primitives, caller-provided).
+  `tantra_core::quant` primitives, caller-provided).
 
 ## `TargetWeights` (output)
 
@@ -61,9 +61,9 @@ Discrete/whole-share allocation is Phase 4 — see
 
 ## Related
 
-- `vyapaar-ledger-portfolio` — `PortfolioState`, `Marks` (read-adapter source).
-- `vyapaar-core::quant` — returns/covariance primitives (source for
+- `tantra-ledger-portfolio` — `PortfolioState`, `Marks` (read-adapter source).
+- `tantra-core::quant` — returns/covariance primitives (source for
   `expected_returns`/`covariance`).
 - Phase 2–4 work is planned in
   [`docs/plans/0003-allocation-phase-2-4.md`](../plans/0003-allocation-phase-2-4.md).
-- Tests: `crates/vyapaar-ledger-allocation/tests/optimize_tests.rs` (17).
+- Tests: `crates/tantra-ledger-allocation/tests/optimize_tests.rs` (17).

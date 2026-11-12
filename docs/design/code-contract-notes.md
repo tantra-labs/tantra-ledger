@@ -1,6 +1,6 @@
-# `vyapaar-ledger-journal` — Contract-Note Golden Framework Reference
+# `tantra-ledger-journal` — Contract-Note Golden Framework Reference
 
-Documents `crates/vyapaar-ledger-journal/src/contract_notes.rs`: the broker
+Documents `crates/tantra-ledger-journal/src/contract_notes.rs`: the broker
 contract-note golden-accounting framework, now a pure library module (the
 filesystem loaders `load_from_csv` / `load_from_json` were dropped for the
 zero-I/O gate; trades are added programmatically).

@@ -4,7 +4,7 @@
 
 ## What's Declared but Missing
 
-`crates/vyapaar-ledger-allocation/src/lib.rs` declares
+`crates/tantra-ledger-allocation/src/lib.rs` declares
 `AllocationObjective::BlackLitterman` ("Black-Litterman blended allocation —
 Phase 3") as a first-class serde enum variant, but `optimize()` returns
 `AllocationError::NotImplemented("Black-Litterman is a Phase 3 objective")` for it.

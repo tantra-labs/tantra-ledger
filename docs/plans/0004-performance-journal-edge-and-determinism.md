@@ -2,7 +2,7 @@
 
 **Status**: Ready for Implementation
 
-**Scope**: `vyapaar-ledger-performance`
+**Scope**: `tantra-ledger-performance`
 
 **Gaps covered**:
 - [0005](../gaps/0005-performance-metrics-clock-query.md) — `MetricsInput::new()` mints `as_of: Utc::now()`

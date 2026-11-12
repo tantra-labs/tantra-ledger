@@ -4,7 +4,7 @@
 
 ## What's Stubbed / Simplified
 
-`crates/vyapaar-ledger-allocation/src/lib.rs` documents a Phase 1
+`crates/tantra-ledger-allocation/src/lib.rs` documents a Phase 1
 simplification: `optimize()` solves the *unconstrained* optimum in exact
 `Decimal` arithmetic, then projects it into the box via
 `apply_bounds` — iterative clip-and-renormalize (clip to `[min, max]`,

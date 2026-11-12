@@ -4,7 +4,7 @@
 
 ## What's Stubbed / Simplified
 
-`crates/vyapaar-ledger-performance/src/metrics.rs` implements the composite
+`crates/tantra-ledger-performance/src/metrics.rs` implements the composite
 `EdgeScore` (0–100) with:
 
 - `EDGE_SCORE_VERSION = 1`

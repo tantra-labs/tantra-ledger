@@ -1,6 +1,6 @@
-# `vyapaar-ledger-journal` — Double-Entry Journal Reference
+# `tantra-ledger-journal` — Double-Entry Journal Reference
 
-Documents `crates/vyapaar-ledger-journal/src/lib.rs`: the immutable double-entry
+Documents `crates/tantra-ledger-journal/src/lib.rs`: the immutable double-entry
 general ledger, the Indian chart of accounts, and the statutory tax calculator.
 
 ## `AccountCode`
@@ -77,10 +77,10 @@ with `total()` and `add_assign(&other)`.
 
 - [`code-contract-notes.md`](code-contract-notes.md) — the broker contract-note
   golden framework in `contract_notes.rs`.
-- `vyapaar-ledger/src/repository.rs` — `LedgerRepository` trait (`post_entry`,
+- `tantra-ledger/src/repository.rs` — `LedgerRepository` trait (`post_entry`,
   `get_balance`) and `InMemoryLedgerRepository`; `JournalTransaction` /
   `PostingEntry` / `PostingSide` facade projections.
-- `vyapaar-core/src/order.rs` — `OrderSide` (canonical serde UPPERCASE).
+- `tantra-core/src/order.rs` — `OrderSide` (canonical serde UPPERCASE).
 - Tests: `unit_tests.rs` (18), `tax_calculator_tests.rs` (27),
   `ledger_proptest_invariants.rs` (8, property-based),
   `golden.rs` (5), plus `benches/golden_tests.rs`.

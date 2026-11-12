@@ -4,11 +4,11 @@
 
 ## What's Stubbed
 
-`crates/vyapaar-ledger-journal/src/lib.rs`, `TaxCalculator::compute_charges`:
+`crates/tantra-ledger-journal/src/lib.rs`, `TaxCalculator::compute_charges`:
 
 ```rust
 let exchange_turnover = match exchange {
-    vyapaar_core::Exchange::Bse => Self::bse_turnover_charges(notional),
+    tantra_core::Exchange::Bse => Self::bse_turnover_charges(notional),
     // NSE, NFO, MCX and CDS all fall back to the NSE cash-segment rate.
     _ => Self::nse_turnover_charges(notional),
 };
@@ -31,7 +31,7 @@ the same fallback.
 ## How to Close It
 
 1. Add per-segment turnover fee tables (NFO, MCX, CDS) fed from an external
-  data source (e.g. `vyapaar-market-finance::india::costs` or `vyapaar-data`).
+  data source (e.g. `tantra-market-finance::india::costs` or `tantra-data`).
 2. Extend `compute_charges` to look up the segment rate instead of falling
   back to NSE cash.
 3. Update the golden fixtures/tests for derivative segments and remove the

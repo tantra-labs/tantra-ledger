@@ -4,7 +4,7 @@
 
 ## What's Stubbed / Violated
 
-`crates/vyapaar-ledger-performance/src/metrics.rs`:
+`crates/tantra-ledger-performance/src/metrics.rs`:
 
 ```rust
 impl MetricsInput {

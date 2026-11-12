@@ -1,16 +1,16 @@
-# `vyapaar-ledger-performance` — Trade Performance Journal Reference
+# `tantra-ledger-performance` — Trade Performance Journal Reference
 
-Documents `crates/vyapaar-ledger-performance/` (`src/lib.rs` plus the modules
+Documents `crates/tantra-ledger-performance/` (`src/lib.rs` plus the modules
 `model`, `store`, `metrics`, `calendar`, `compare`): the trader's
 performance/annotations journal — a **thin layer on top of
-`vyapaar-ledger-portfolio`**, not a re-implementation of FIFO lot matching.
+`tantra-ledger-portfolio`**, not a re-implementation of FIFO lot matching.
 
 > Naming: this crate deliberately avoids the word "journal" in its name —
-> `vyapaar-ledger-journal` already owns the double-entry accounting meaning.
+> `tantra-ledger-journal` already owns the double-entry accounting meaning.
 
 ## Layering
 
-`vyapaar-ledger-portfolio::AccountState::match_lots` derives FIFO round-trips as
+`tantra-ledger-portfolio::AccountState::match_lots` derives FIFO round-trips as
 `MatchedLot`s — each a closed trade leg with realized PnL. This crate consumes
 that closed-trade stream (via `ClosedTrade::from_matched_lot`), attaches user
 annotations, and computes analytics. It does not own fills or lot-matching.
@@ -84,7 +84,7 @@ all PnL, R-multiple, ratio, and edge-score figures are exact
 
 ## Related
 
-- `vyapaar-ledger-portfolio` — `MatchedLot` / `AccountState::match_lots` source
+- `tantra-ledger-portfolio` — `MatchedLot` / `AccountState::match_lots` source
   of the closed-trade stream.
 - Open work is planned in
   [`docs/plans/0004-performance-journal-edge-and-determinism.md`](../plans/0004-performance-journal-edge-and-determinism.md).

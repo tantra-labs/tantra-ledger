@@ -4,7 +4,7 @@
 
 ## What's Declared but Unused
 
-`crates/vyapaar-ledger-oms/src/lib.rs` defines four context types as "canvas the
+`crates/tantra-ledger-oms/src/lib.rs` defines four context types as "canvas the
 risk gate and broker adapters fill in":
 
 - `MarketData { instrument, bid, ask, last, volume, timestamp }`

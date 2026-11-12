@@ -4,7 +4,7 @@
 
 ## What's Duplicated / Inconsistent
 
-`crates/vyapaar-ledger-journal` intentionally maintains **two** statutory-fee
+`crates/tantra-ledger-journal` intentionally maintains **two** statutory-fee
 tracks:
 
 - **Legacy floor-rounded methods** (retained verbatim for the

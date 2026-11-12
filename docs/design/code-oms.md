@@ -1,6 +1,6 @@
-# `vyapaar-ledger-oms` — Order Management System Reference
+# `tantra-ledger-oms` — Order Management System Reference
 
-Documents `crates/vyapaar-ledger-oms/src/lib.rs`: the pure synchronous OMS state
+Documents `crates/tantra-ledger-oms/src/lib.rs`: the pure synchronous OMS state
 machine owning the SEBI order lifecycle, idempotency, fill reconciliation, and
 the OMS context canvas for pre-submission checks.
 
@@ -90,9 +90,9 @@ These types are defined but not yet wired into OMS validation — tracked as
 
 ## Related
 
-- `vyapaar-core/src/order.rs` — `OrderRequest`, `OrderSide`, `OrderType`,
+- `tantra-core/src/order.rs` — `OrderRequest`, `OrderSide`, `OrderType`,
   `OrderStatus`, `OrderAck`, `FillReport`, `TimeInForce`.
-- `vyapaar-core/src/types.rs` — `Price`, `Quantity`, `InstrumentId`, `Money`.
-- `vyapaar-ledger-portfolio` — FIFO tax-lot matching consumes `FillReport`s from
+- `tantra-core/src/types.rs` — `Price`, `Quantity`, `InstrumentId`, `Money`.
+- `tantra-ledger-portfolio` — FIFO tax-lot matching consumes `FillReport`s from
   the OMS.
-- Tests: `crates/vyapaar-ledger-oms/tests/unit_tests.rs` (25 tests).
+- Tests: `crates/tantra-ledger-oms/tests/unit_tests.rs` (25 tests).

@@ -1,6 +1,6 @@
-# `vyapaar-ledger` — Repository Traits Reference
+# `tantra-ledger` — Repository Traits Reference
 
-Documents `crates/vyapaar-ledger/src/repository.rs`: pure domain repository
+Documents `crates/tantra-ledger/src/repository.rs`: pure domain repository
 traits and in-memory reference implementations (dependency inversion — the
 domain owns the traits, infrastructure implements them).
 
@@ -64,13 +64,13 @@ database drivers.
 
 ## Related
 
-- `crates/vyapaar-ledger/src/lib.rs` — facade re-exports (repository types,
+- `crates/tantra-ledger/src/lib.rs` — facade re-exports (repository types,
   canonical `AccountId`/`AlgoId`/`ClientOrderId`/`FillReport`/`TransactionId`
-  from `vyapaar_core`, `LedgerTransaction`, `DoubleEntryLedger`,
+  from `tantra_core`, `LedgerTransaction`, `DoubleEntryLedger`,
   `LedgerError`, `MatchedLot`, `TaxLot`).
-- `vyapaar-ledger-oms` — `OrderStateMachine` produces orders saved via
+- `tantra-ledger-oms` — `OrderStateMachine` produces orders saved via
   `OrderRepository`.
-- `vyapaar-ledger-portfolio` — `AccountState` owns FIFO matching used by
+- `tantra-ledger-portfolio` — `AccountState` owns FIFO matching used by
   `PositionRepository`.
-- `vyapaar-ledger-journal` — `DoubleEntryLedger` produces transactions saved via
+- `tantra-ledger-journal` — `DoubleEntryLedger` produces transactions saved via
   `LedgerRepository`; `AccountCode` is owned by the journal.

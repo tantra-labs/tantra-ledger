@@ -4,7 +4,7 @@
 
 ## What's Simplified
 
-`crates/vyapaar-ledger-portfolio/src/lib.rs` applies corporate actions at the
+`crates/tantra-ledger-portfolio/src/lib.rs` applies corporate actions at the
 aggregate-position level, not per FIFO `TaxLot`:
 
 - `adjust_for_split` adjusts `pos.quantity` / `pos.entry_price` and notes

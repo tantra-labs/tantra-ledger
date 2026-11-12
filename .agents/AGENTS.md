@@ -1,4 +1,4 @@
-# `vyapaar-ledger` Agent Guidelines & Architecture Invariants
+# `tantra-ledger` Agent Guidelines & Architecture Invariants
 
 **Subsystem**: Heart (OMS, Portfolio & Ledger Engine)
 **Language**: Rust
@@ -7,7 +7,7 @@
 ---
 
 ## 1. Role & Architectural Hints
-* `vyapaar-ledger` contains the domain core:
+* `tantra-ledger` contains the domain core:
   1. **OMS State Machine (`oms`)**: Validated transitions for `New` -> `Submitted` -> `PartiallyFilled` -> `Filled` / `Canceled` / `Rejected`. Pure synchronous state machine with zero async/await.
   2. **FIFO Tax-Lot Accounting (`portfolio`)**: Deterministic lot matching, cost basis calculation, unrealized and realized PnL.
   3. **Double-Entry General Ledger (`journal`)**: Balanced multi-currency journal entries keyed by canonical `AccountCode` guaranteeing ledger integrity down to the single paisa.

@@ -1,0 +1,17 @@
+[package]
+name = "tantra-ledger-performance"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Pure trade-performance journal: annotations, performance metrics, edge score, daily P&L calendar and account comparison (tantra-ledger plan 0002)"
+
+[dependencies]
+tantra-core = { workspace = true }
+tantra-ledger-portfolio = { workspace = true }
+chrono = { workspace = true }
+rust_decimal = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

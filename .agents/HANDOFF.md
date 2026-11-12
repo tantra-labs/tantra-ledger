@@ -1,7 +1,7 @@
-# HANDOFF — vyapaar-ledger
+# HANDOFF — tantra-ledger
 
 **Status**: Docs restructured — roadmap dismantled into `design` / `gaps` / `plans`. Batch done.
-**Date**: 2026-11-12 · Repo: `vyapaar-ledger` · Branch: `main`
+**Date**: 2026-11-12 · Repo: `tantra-ledger` · Branch: `main`
 
 ## Phase / Slice Status (COMPLETE)
 

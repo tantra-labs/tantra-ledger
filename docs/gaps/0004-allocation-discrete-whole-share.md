@@ -4,7 +4,7 @@
 
 ## What's Missing
 
-`crates/vyapaar-ledger-allocation` produces continuous fractional `TargetWeights`
+`crates/tantra-ledger-allocation` produces continuous fractional `TargetWeights`
 summing to 1. There is no discrete / whole-share allocation step that maps the
 continuous target weights onto an actual tradable book (whole shares × an
 execution currency, respecting lot sizes), which is the recorded Phase 4 scope
@@ -12,7 +12,7 @@ of plan 0001 (`docs/plans/README.md`).
 
 ## Why
 
-- A live trading caller (eventually `vyapaar-exec`) cannot place fractional
+- A live trading caller (eventually `tantra-exec`) cannot place fractional
   shares; without a deterministic rounding step, research weights are not
   directly executable.
 - The workspace zero-floats and research-live parity invariants require the

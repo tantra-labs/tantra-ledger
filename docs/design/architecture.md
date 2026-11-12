@@ -1,8 +1,8 @@
-# `vyapaar-ledger` — DDD Architecture & Pure Domain Heart
+# `tantra-ledger` — DDD Architecture & Pure Domain Heart
 
 ## 1. Bounded Context & Responsibility
 
-`vyapaar-ledger` (Tier 1B, ported and refactored from `honba-kokoro`) is the
+`tantra-ledger` (Tier 1B, ported and refactored from `honba-kokoro`) is the
 **Zero-I/O Domain Heart**: it owns the post-risk order lifecycle (OMS state
 machine), FIFO tax-lot & T+1 Demat settlement accounting (portfolio), double-entry
 bookkeeping and Indian statutory taxes (journal), portfolio target-weight
@@ -20,24 +20,24 @@ exact `rust_decimal::Decimal` arithmetic — zero `f32`/`f64` in any financial p
 
 | Crate | Aggregate Root / Domain Service | Responsibility |
 | :--- | :--- | :--- |
-| `vyapaar-ledger-oms` | `OrderStateMachine` / `OrderEntry` | Deterministic SEBI order lifecycle FSM (`PendingNew` → `New` → `PartiallyFilled` → `Filled` / `Cancelled` / `Rejected` / `Expired`), `ClientOrderId` idempotency, target-vs-cumulative fill reconciliation, plus the OMS context canvas (`OmsConfig`, `MarketData`, `PortfolioRiskState`, `OmsSnapshot`). |
-| `vyapaar-ledger-portfolio` | `AccountState` / `PortfolioState` | FIFO tax-lot matching (`TaxLot`, `MatchedLot`, `LotFill`), realized & unrealized MTM PnL (`HeldPosition`, `Marks`, `value`), Indian corporate actions (`Split`, `Bonus`, `Dividend`, `Demerger`), ICCL T+1 Demat rolling settlement (`ClearingCalendar`, `DematHoldings`, `SettlementEngine`, `settle_trades`), and capital-gains / tax summaries. |
-| `vyapaar-ledger-journal` | `DoubleEntryLedger` / `TaxCalculator` | Immutable double-entry general ledger (`sum(Debits) == sum(Credits)`), the Indian chart of accounts (`AccountCode`), statutory charge calculation (`TaxBreakdown`, `compute_charges`), and the broker contract-note golden framework (`contract_notes`). |
-| `vyapaar-ledger-allocation` | `PortfolioState` (adapter) / `TargetWeights` | Pure portfolio allocation: `optimize()` for `AllocationObjective::{MeanVariance, RiskParity}` under `Constraint::WeightBounds`, exact `Decimal` linear algebra (Gaussian elimination, fixed-point risk parity). |
-| `vyapaar-ledger-performance` | `JournalStore` / `ClosedTrade` | Trader's performance journal: annotations (`TradeAnnotation`), day-keyed notes, `PerformanceMetrics` + composite `EdgeScore`, daily P&L calendar (`PnlCalendar`), and account comparison. Thin layer over `vyapaar-ledger-portfolio` FIFO matches. |
-| `vyapaar-ledger` | Repository traits & facade | Re-exports `oms`, `portfolio`, `journal`, pure domain repository traits (`OrderRepository`, `AccountRepository`, `PositionRepository`, `LedgerRepository`) with in-memory reference implementations, and the risk-aware sizing hook (`Portfolio`, `evaluate_risk_budget`). |
+| `tantra-ledger-oms` | `OrderStateMachine` / `OrderEntry` | Deterministic SEBI order lifecycle FSM (`PendingNew` → `New` → `PartiallyFilled` → `Filled` / `Cancelled` / `Rejected` / `Expired`), `ClientOrderId` idempotency, target-vs-cumulative fill reconciliation, plus the OMS context canvas (`OmsConfig`, `MarketData`, `PortfolioRiskState`, `OmsSnapshot`). |
+| `tantra-ledger-portfolio` | `AccountState` / `PortfolioState` | FIFO tax-lot matching (`TaxLot`, `MatchedLot`, `LotFill`), realized & unrealized MTM PnL (`HeldPosition`, `Marks`, `value`), Indian corporate actions (`Split`, `Bonus`, `Dividend`, `Demerger`), ICCL T+1 Demat rolling settlement (`ClearingCalendar`, `DematHoldings`, `SettlementEngine`, `settle_trades`), and capital-gains / tax summaries. |
+| `tantra-ledger-journal` | `DoubleEntryLedger` / `TaxCalculator` | Immutable double-entry general ledger (`sum(Debits) == sum(Credits)`), the Indian chart of accounts (`AccountCode`), statutory charge calculation (`TaxBreakdown`, `compute_charges`), and the broker contract-note golden framework (`contract_notes`). |
+| `tantra-ledger-allocation` | `PortfolioState` (adapter) / `TargetWeights` | Pure portfolio allocation: `optimize()` for `AllocationObjective::{MeanVariance, RiskParity}` under `Constraint::WeightBounds`, exact `Decimal` linear algebra (Gaussian elimination, fixed-point risk parity). |
+| `tantra-ledger-performance` | `JournalStore` / `ClosedTrade` | Trader's performance journal: annotations (`TradeAnnotation`), day-keyed notes, `PerformanceMetrics` + composite `EdgeScore`, daily P&L calendar (`PnlCalendar`), and account comparison. Thin layer over `tantra-ledger-portfolio` FIFO matches. |
+| `tantra-ledger` | Repository traits & facade | Re-exports `oms`, `portfolio`, `journal`, pure domain repository traits (`OrderRepository`, `AccountRepository`, `PositionRepository`, `LedgerRepository`) with in-memory reference implementations, and the risk-aware sizing hook (`Portfolio`, `evaluate_risk_budget`). |
 
 ### Dependency graph
 
 ```mermaid
 flowchart LR
-    Core["vyapaar-core (shared kernel)"]
-    OMS["vyapaar-ledger-oms"]
-    PF["vyapaar-ledger-portfolio"]
-    JR["vyapaar-ledger-journal"]
-    AL["vyapaar-ledger-allocation"]
-    PE["vyapaar-ledger-performance"]
-    FA["vyapaar-ledger (facade)"]
+    Core["tantra-core (shared kernel)"]
+    OMS["tantra-ledger-oms"]
+    PF["tantra-ledger-portfolio"]
+    JR["tantra-ledger-journal"]
+    AL["tantra-ledger-allocation"]
+    PE["tantra-ledger-performance"]
+    FA["tantra-ledger (facade)"]
 
     Core --> OMS
     Core --> PF
@@ -51,8 +51,8 @@ flowchart LR
     JR --> FA
 ```
 
-Every crate depends only on `vyapaar-core` and (for `allocation` and
-`performance`) on `vyapaar-ledger-portfolio`; `allocation` and `performance`
+Every crate depends only on `tantra-core` and (for `allocation` and
+`performance`) on `tantra-ledger-portfolio`; `allocation` and `performance`
 are siblings of the facade and are **not** re-exported through it.
 
 ## 3. Architectural Invariants
@@ -65,7 +65,7 @@ are siblings of the facade and are **not** re-exported through it.
    [`docs/gaps/0005-performance-metrics-clock-query.md`](../gaps/0005-performance-metrics-clock-query.md).)
 3. **Zero floats**: `rust_decimal::Decimal` everywhere money/price/quantity/tax
    is computed; matrix inversion, risk-parity fixed point, and bound projection
-   in `vyapaar-ledger-allocation` all run in exact `Decimal`.
+   in `tantra-ledger-allocation` all run in exact `Decimal`.
 4. **DDD aggregates own their rules**: FIFO matching lives on
    `AccountState::match_lots`; balance validation lives on
    `JournalTransaction::validate` / `DoubleEntryLedger::post`; the lifecycle
@@ -78,11 +78,11 @@ are siblings of the facade and are **not** re-exported through it.
 
 ## 4. Role in the Event Pipeline
 
-`vyapaar-ledger` sits downstream of the risk gate: after
-`vyapaar-risk` releases an `OrderEvent`, the OMS (`vyapaar-ledger-oms`) owns the
-order lifecycle, `FillReport`s feed FIFO tax-lot matching (`vyapaar-ledger-portfolio`),
+`tantra-ledger` sits downstream of the risk gate: after
+`tantra-risk` releases an `OrderEvent`, the OMS (`tantra-ledger-oms`) owns the
+order lifecycle, `FillReport`s feed FIFO tax-lot matching (`tantra-ledger-portfolio`),
 and every cash/securities movement is journaled by the double-entry ledger
-(`vyapaar-ledger-journal`). `allocation` and `performance` are read-side /
+(`tantra-ledger-journal`). `allocation` and `performance` are read-side /
 research engines that consume portfolio state but never place an order.
 
 ## 5. Test Layout & Verification
@@ -100,7 +100,7 @@ make fmt      # cargo fmt
 
 See [`implementation-record.md`](implementation-record.md) for the migration and
 landing history, [`code-migration-map.md`](code-migration-map.md) for the
-`honba-kokoro → vyapaar-ledger` file mapping, and the per-module references
+`honba-kokoro → tantra-ledger` file mapping, and the per-module references
 (`code-oms.md`, `code-portfolio.md`, `code-journal.md`, `code-contract-notes.md`,
 `code-repository.md`, `code-sizing.md`, `code-allocation.md`,
 `code-performance.md`) for API-level detail.

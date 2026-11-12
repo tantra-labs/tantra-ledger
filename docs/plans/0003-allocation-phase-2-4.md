@@ -2,7 +2,7 @@
 
 **Status**: Ready for Implementation
 
-**Scope**: `vyapaar-ledger-allocation`
+**Scope**: `tantra-ledger-allocation`
 
 **Gaps covered**:
 - [0001](../gaps/0001-allocation-hrp-not-implemented.md) — `Hrp` objective

@@ -2,7 +2,7 @@
 
 **Status**: Proposed
 
-**Scope**: `vyapaar-ledger-portfolio`, `vyapaar-ledger-journal`, `vyapaar-ledger-oms`
+**Scope**: `tantra-ledger-portfolio`, `tantra-ledger-journal`, `tantra-ledger-oms`
 
 **Gaps covered**:
 - [0007](../gaps/0007-portfolio-hardcoded-nse-calendar.md) — hardcoded NSE holiday table
@@ -34,7 +34,7 @@ fee track rather than the canonical one (0010). The OMS declares
 
 - Remove the hardcoded holiday table; `ClearingCalendar::new()` becomes an
   empty (weekend-only) calendar, real holidays injected via `with_holidays`
-  from `vyapaar-data` / the backtest `NseTradingCalendar` (gap 0007).
+  from `tantra-data` / the backtest `NseTradingCalendar` (gap 0007).
 - Add per-lot adjustments for split/bonus/demerger on `TaxLot` quantity,
   entry price, and remaining quantity; keep aggregate helpers as projections
   (gap 0008).
