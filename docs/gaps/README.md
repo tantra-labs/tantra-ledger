@@ -14,7 +14,7 @@ the remaining future work is enumerated below.
 
 | # | Title | Severity | Status | Plan |
 |---|-------|----------|--------|------|
-| — | *(none)* | — | — | — |
+| [0012](0012-bracket-order-oms-lifecycle.md) | No bracket-order (SL/TSL) OMS lifecycle — entry + SL/target child orders, TSL modify events, stop-trigger close (Elephant Edge EE+) | High | Open | root `docs/plans/0005` |
 
 ## Closed Gaps
 
