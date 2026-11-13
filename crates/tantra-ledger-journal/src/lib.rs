@@ -28,8 +28,8 @@
 //! - The broker contract-note golden framework now lives in
 //!   [`contract_notes`] as a pure library module: the `load_from_csv` /
 //!   `load_from_json` filesystem loaders were dropped (zero-I/O gate), sample
-//!   fixtures take an explicit `now: DateTime<Utc>` instead of calling
-//!   `Utc::now()`, and `generate_sample_csv` writes CSV text directly.
+//!   fixtures take an explicit `now: DateTime<Utc>` instead of querying the
+//!   wall clock, and `generate_sample_csv` writes CSV text directly.
 //! - The legacy floor-rounded statutory functions are retained verbatim for
 //!   the paise-denominated contract-note fixtures; the newer canonical
 //!   methods round half-even to 2 dp.
@@ -46,8 +46,8 @@ pub use contract_notes::{
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use std::collections::BTreeMap;
-use thiserror::Error;
 use tantra_core::OrderSide;
+use thiserror::Error;
 
 /// Error types for ledger operations.
 #[derive(Debug, Error)]

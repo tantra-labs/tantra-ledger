@@ -11,14 +11,16 @@
 //! FIFO matches, plus an optional equity curve for drawdown. It does not own
 //! fills or lot-matching.
 //!
-//! # Edge score (v1)
+//! # Edge score (v2)
 //!
-//! The plan flags the exact per-component scoring and blend formula as an
-//! open design question (LuxAlgo's proprietary weighting is not
-//! reverse-engineered). This v1 implementation uses a transparent, documented
-//! formula with equal component weights; it is deliberately easy to replace.
-//! The score is `None` until at least 5 closed trades exist (Vela's own
-//! empty-state: "5 more closed trades needed").
+//! The composite 0–100 edge score blends six independently-scored components
+//! (win rate, profit factor, avg win/loss, drawdown, recovery, consistency).
+//! v1 shipped an explicit *placeholder* formula with equal component weights
+//! (gap 0006); v2 documents each component's scoring bracket and replaces the
+//! equal-weight average with a weighted blend that emphasises profitability
+//! quality and capital preservation. The score is `None` until at least
+//! [`MIN_CLOSED_TRADES_FOR_SCORE`] closed trades exist (Vela's own empty
+//! state: "5 more closed trades needed").
 
 use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
@@ -98,8 +100,24 @@ pub struct EdgeScoreComponents {
 /// Minimum closed trades before an edge score is published (Vela's own
 /// empty state: "5 more closed trades needed").
 pub const MIN_CLOSED_TRADES_FOR_SCORE: u64 = 5;
-/// Edge-score schema version (v1 placeholder formula).
-pub const EDGE_SCORE_VERSION: u32 = 1;
+/// Edge-score schema version (v2 weighted spec — see the module docs and
+/// [`compute_edge_score`] for the component brackets and blend weights).
+pub const EDGE_SCORE_VERSION: u32 = 2;
+
+// Edge-score blend weights (v2). Each component is scored 0–100; the
+// composite is the weighted sum. Weights sum to exactly 1.
+/// Weight of the win-rate component in the v2 composite.
+pub const EDGE_WEIGHT_WIN_RATE: Decimal = Decimal::from_parts(20, 0, 0, false, 2); // 0.20
+/// Weight of the profit-factor component (the highest-weighted single input).
+pub const EDGE_WEIGHT_PROFIT_FACTOR: Decimal = Decimal::from_parts(25, 0, 0, false, 2); // 0.25
+/// Weight of the avg-win/loss component.
+pub const EDGE_WEIGHT_AVG_WIN_LOSS: Decimal = Decimal::from_parts(15, 0, 0, false, 2); // 0.15
+/// Weight of the drawdown component (second-highest: capital preservation).
+pub const EDGE_WEIGHT_DRAWDOWN: Decimal = Decimal::from_parts(20, 0, 0, false, 2); // 0.20
+/// Weight of the recovery-factor component.
+pub const EDGE_WEIGHT_RECOVERY: Decimal = Decimal::from_parts(10, 0, 0, false, 2); // 0.10
+/// Weight of the consistency component.
+pub const EDGE_WEIGHT_CONSISTENCY: Decimal = Decimal::from_parts(10, 0, 0, false, 2); // 0.10
 
 /// Input to the metrics engine.
 #[derive(Debug, Clone)]
@@ -117,12 +135,18 @@ pub struct MetricsInput {
 }
 
 impl MetricsInput {
-    pub fn new(closed_trades: Vec<ClosedTrade>) -> Self {
+    /// Build the metrics input with an explicit, caller-injected as-of
+    /// timestamp.
+    ///
+    /// `as_of` is **required** — temporal determinism (ADR 0032) forbids
+    /// wall-clock queries in domain code. Do not re-introduce the wall clock
+    /// here: identical trade streams must produce byte-identical metrics.
+    pub fn new(closed_trades: Vec<ClosedTrade>, as_of: DateTime<Utc>) -> Self {
         Self {
             closed_trades,
             open_trades: 0,
             equity_curve: Vec::new(),
-            as_of: Utc::now(), // test-only placeholder; callers should set explicitly
+            as_of,
         }
     }
 
@@ -133,11 +157,6 @@ impl MetricsInput {
 
     pub fn with_equity_curve(mut self, curve: Vec<(NaiveDate, Money)>) -> Self {
         self.equity_curve = curve;
-        self
-    }
-
-    pub fn with_as_of(mut self, t: DateTime<Utc>) -> Self {
-        self.as_of = t;
         self
     }
 }
@@ -407,9 +426,21 @@ fn compute_drawdown(curve: &[(NaiveDate, Money)]) -> (Option<Money>, Option<Deci
 
 /// Compute the composite edge score (0-100) from the metrics.
 ///
-/// v1 formula: each of six components is scored 0-100, then blended with
-/// equal weights. Returns `None` when fewer than
+/// v2 formula (gap 0006): each of six components is scored 0-100 on the
+/// documented brackets below, then blended with the
+/// [`EDGE_WEIGHT_*`] weights (sum = 1). Returns `None` when fewer than
 /// [`MIN_CLOSED_TRADES_FOR_SCORE`] closed trades exist.
+///
+/// Component brackets (v2 spec — design decision documented in the module):
+///
+/// | component | bracket (0 → 100) |
+/// | :--- | :--- |
+/// | win_rate | linear in the win rate: 0% → 0, 100% → 100 |
+/// | profit_factor | lerp 0.5 → 0, 1 → 50, ≥ 2 → 100; no losses → 100 |
+/// | avg_win_loss | lerp 0.5 → 0, 1 → 50, ≥ 2 → 100 |
+/// | drawdown | 0% → 100, −5 per 1pp (linear); ≥ 20% → 0; no curve → 50 |
+/// | recovery | lerp 0 → 0, 1 → 50, ≥ 2 → 100 |
+/// | consistency | 0.6·day-win-rate + 0.4·streak balance (see [`score_consistency`]) |
 pub fn compute_edge_score(metrics: &PerformanceMetrics) -> EdgeScore {
     let closed = metrics.closed_trades;
     let components = if closed >= MIN_CLOSED_TRADES_FOR_SCORE {
@@ -433,13 +464,7 @@ pub fn compute_edge_score(metrics: &PerformanceMetrics) -> EdgeScore {
     };
 
     let score = if closed >= MIN_CLOSED_TRADES_FOR_SCORE {
-        let total = components.win_rate
-            + components.profit_factor
-            + components.avg_win_loss
-            + components.drawdown
-            + components.recovery
-            + components.consistency;
-        Some(total / Decimal::from(6))
+        Some(blend_edge_score(&components))
     } else {
         None
     };
@@ -450,6 +475,17 @@ pub fn compute_edge_score(metrics: &PerformanceMetrics) -> EdgeScore {
         components,
         closed_trades: closed,
     }
+}
+
+/// Blend the six component scores into the 0-100 composite using the
+/// documented [`EDGE_WEIGHT_*`] weights (which sum to 1).
+fn blend_edge_score(components: &EdgeScoreComponents) -> Decimal {
+    components.win_rate * EDGE_WEIGHT_WIN_RATE
+        + components.profit_factor * EDGE_WEIGHT_PROFIT_FACTOR
+        + components.avg_win_loss * EDGE_WEIGHT_AVG_WIN_LOSS
+        + components.drawdown * EDGE_WEIGHT_DRAWDOWN
+        + components.recovery * EDGE_WEIGHT_RECOVERY
+        + components.consistency * EDGE_WEIGHT_CONSISTENCY
 }
 
 // ---------------------------------------------------------------------------
@@ -487,12 +523,29 @@ fn score_win_rate(m: &PerformanceMetrics) -> Decimal {
     clamp0100(wr * Decimal::from(100))
 }
 
+/// Score a payoff ratio (profit factor or avg win/loss) on the v2 bracket:
+/// `≤ 0.5 → 0`, `1 → 50`, `≥ 2 → 100`, piecewise-linear in between.
+///
+/// A ratio of 1 is breakeven, so it must score mid-range (50); the two
+/// segments `[0.5, 1]` and `[1, 2]` map 0→50 and 50→100 respectively.
+fn score_payoff_ratio(ratio: Decimal) -> Decimal {
+    let half = Decimal::from_parts(5, 0, 0, false, 1); // 0.5
+    if ratio <= half {
+        Decimal::ZERO
+    } else if ratio >= Decimal::from(2) {
+        Decimal::from(100)
+    } else if ratio <= Decimal::ONE {
+        // 0.5 → 0, 1 → 50: 50 · (ratio − 0.5) / 0.5
+        (ratio - half) / half * Decimal::from(50)
+    } else {
+        // 1 → 50, 2 → 100: 50 + 50 · (ratio − 1)
+        Decimal::from(50) + (ratio - Decimal::ONE) * Decimal::from(50)
+    }
+}
+
 fn score_profit_factor(m: &PerformanceMetrics) -> Decimal {
     match m.profit_factor {
-        Some(pf) => {
-            // pf <= 0.5 → 0; pf = 1 → 50; pf >= 2 → 100
-            lerp_score(pf, Decimal::from(5) / Decimal::from(10), Decimal::from(2))
-        }
+        Some(pf) => score_payoff_ratio(pf),
         None => {
             if m.profit_factor_is_infinite {
                 Decimal::from(100)
@@ -505,10 +558,7 @@ fn score_profit_factor(m: &PerformanceMetrics) -> Decimal {
 
 fn score_avg_win_loss(m: &PerformanceMetrics) -> Decimal {
     match m.avg_win_loss_ratio {
-        Some(r) => {
-            // ratio <= 0.5 → 0; ratio = 1 → 50; ratio >= 2 → 100
-            lerp_score(r, Decimal::from(5) / Decimal::from(10), Decimal::from(2))
-        }
+        Some(r) => score_payoff_ratio(r),
         None => Decimal::ZERO,
     }
 }
@@ -534,13 +584,28 @@ fn score_recovery(m: &PerformanceMetrics) -> Decimal {
     }
 }
 
+/// v2 consistency score (0-100): a 60/40 blend of the profitable-day ratio
+/// (winning days ÷ trading days) and the win/loss streak balance.
+///
+/// Day-win-rate captures *repeatability across sessions*; the streak balance
+/// captures whether the wins and losses cluster. Both are weak signals on
+/// their own, so each is half-credible alone and the blend is the honest
+/// combined measure.
 fn score_consistency(m: &PerformanceMetrics) -> Decimal {
-    let wins_streak = m.max_win_streak;
-    let losses_streak = m.max_loss_streak;
-    if wins_streak == 0 && losses_streak == 0 {
-        Decimal::from(50)
-    } else {
-        let total = wins_streak + losses_streak;
-        clamp0100(Decimal::from(wins_streak) / Decimal::from(total) * Decimal::from(100))
-    }
+    let day_score = match m.day_win_rate {
+        Some(dwr) => clamp0100(dwr * Decimal::from(100)),
+        None => Decimal::from(50), // no trading days → neutral
+    };
+    let streak_score = {
+        let wins = m.max_win_streak;
+        let losses = m.max_loss_streak;
+        if wins == 0 && losses == 0 {
+            Decimal::from(50)
+        } else {
+            let total = wins + losses;
+            clamp0100(Decimal::from(wins) / Decimal::from(total) * Decimal::from(100))
+        }
+    };
+    day_score * Decimal::from_parts(6, 0, 0, false, 1) // 0.6
+        + streak_score * Decimal::from_parts(4, 0, 0, false, 1) // 0.4
 }

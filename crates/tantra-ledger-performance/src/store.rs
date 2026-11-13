@@ -157,15 +157,15 @@ impl JournalStore {
     ) -> Vec<&ClosedTrade> {
         let mut trades: Vec<&ClosedTrade> = self.closed_trades.values().collect();
         trades.retain(|t| {
-            if let Some(f) = from {
-                if t.exit_date < f {
-                    return false;
-                }
+            if let Some(f) = from
+                && t.exit_date < f
+            {
+                return false;
             }
-            if let Some(t_) = to {
-                if t.exit_date > t_ {
-                    return false;
-                }
+            if let Some(t_) = to
+                && t.exit_date > t_
+            {
+                return false;
             }
             true
         });

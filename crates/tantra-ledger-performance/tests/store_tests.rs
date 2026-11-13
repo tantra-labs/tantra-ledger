@@ -5,7 +5,7 @@ use rust_decimal::Decimal;
 use tantra_core::{Currency, Money};
 
 mod common;
-use common::{now};
+use common::now;
 use tantra_ledger_performance::model::{
     AccountProvenance, JournalAccountId, PnlConvention, TradeAnnotation,
 };

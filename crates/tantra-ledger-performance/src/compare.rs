@@ -41,11 +41,11 @@ pub fn compare_accounts(
     as_of: DateTime<Utc>,
     is_prior_period: bool,
 ) -> AccountComparison {
-    let metrics_a = compute_metrics(&crate::metrics::MetricsInput::new(trades_a).with_as_of(as_of))
+    let metrics_a = compute_metrics(&crate::metrics::MetricsInput::new(trades_a, as_of))
         .unwrap_or_default_metrics();
     let edge_a = compute_edge_score(&metrics_a);
 
-    let metrics_b = compute_metrics(&crate::metrics::MetricsInput::new(trades_b).with_as_of(as_of))
+    let metrics_b = compute_metrics(&crate::metrics::MetricsInput::new(trades_b, as_of))
         .unwrap_or_default_metrics();
     let edge_b = compute_edge_score(&metrics_b);
 
@@ -80,14 +80,12 @@ pub fn compare_account_vs_prior(
     let (prior, current): (Vec<ClosedTrade>, Vec<ClosedTrade>) =
         trades.into_iter().partition(|t| t.exit_date < boundary);
 
-    let metrics_current =
-        compute_metrics(&crate::metrics::MetricsInput::new(current).with_as_of(as_of))
-            .unwrap_or_default_metrics();
+    let metrics_current = compute_metrics(&crate::metrics::MetricsInput::new(current, as_of))
+        .unwrap_or_default_metrics();
     let edge_current = compute_edge_score(&metrics_current);
 
-    let metrics_prior =
-        compute_metrics(&crate::metrics::MetricsInput::new(prior).with_as_of(as_of))
-            .unwrap_or_default_metrics();
+    let metrics_prior = compute_metrics(&crate::metrics::MetricsInput::new(prior, as_of))
+        .unwrap_or_default_metrics();
     let edge_prior = compute_edge_score(&metrics_prior);
 
     AccountComparison {

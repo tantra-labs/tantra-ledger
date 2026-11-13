@@ -9,7 +9,6 @@ use std::str::FromStr;
 
 use chrono::{DateTime, TimeZone, Utc};
 use rust_decimal::Decimal;
-use uuid::Uuid;
 use tantra_core::{
     Exchange, InstrumentId, Money, OrderRequest, OrderSide, OrderType, Price, Quantity, TimeInForce,
 };
@@ -17,6 +16,7 @@ use tantra_ledger_oms::{
     ClientOrderId, MAX_QUANTITY_PER_ORDER, OrderError, OrderStateMachine, OrderStatus,
     TransitionError, build_order_ack, submit_order, validate_fill_report, validate_order_params,
 };
+use uuid::Uuid;
 
 fn fixed_time() -> DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 1, 2, 9, 15, 0).unwrap()

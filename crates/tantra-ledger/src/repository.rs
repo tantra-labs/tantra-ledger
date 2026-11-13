@@ -21,12 +21,12 @@ use std::collections::{BTreeMap, HashMap};
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 use tantra_core::{
     AccountId, AlgoId, ClientOrderId, Currency, FillReport, InstrumentId, Money, OrderSide,
     OrderStatus, OrderType, PositionSide, Price, Quantity, TimeInForce, TransactionId,
 };
 use tantra_ledger_portfolio::{AccountState, LotFill, MatchedLot, TaxLot};
+use thiserror::Error;
 
 /// Canonical ledger account code in the Chart of Accounts (owned by the
 /// journal crate; re-exported here as part of the domain vocabulary).

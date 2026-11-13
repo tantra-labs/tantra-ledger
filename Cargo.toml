@@ -30,7 +30,7 @@ tantra-ledger-allocation = { path = "crates/tantra-ledger-allocation" }
 tantra-ledger-performance = { path = "crates/tantra-ledger-performance" }
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
-rust_decimal = { version = "1", features = ["serde-with-str"] }
+rust_decimal = { version = "1", features = ["serde-with-str", "maths"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 thiserror = "1"

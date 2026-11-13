@@ -26,9 +26,9 @@
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use std::collections::BTreeMap;
+use tantra_core::{Money, OrderAck, OrderRequest, Quantity};
 use thiserror::Error;
 use uuid::Uuid;
-use tantra_core::{Money, OrderAck, OrderRequest, Quantity};
 
 // ——————————————————————————————————————————————————————————————————————————
 // Canonical vocabulary (re-exported so downstream gates import only this crate)
