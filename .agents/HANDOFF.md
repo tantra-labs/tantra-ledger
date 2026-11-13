@@ -1,10 +1,48 @@
 # HANDOFF — tantra-ledger
 
-**Status**: T2 track complete — plans 0003 (allocation phases 2–4) and 0004
-(performance determinism & edge score v2) implemented; gaps 0001–0006 closed.
+**Status**: T2 track complete — plans 0003 (allocation phases 2–4), 0004
+(performance determinism & edge score v2), and 0005 (settlement, corporate
+actions & statutory-fee consolidation) implemented; gaps 0001–0011 closed.
 **Date**: 2026-11-13 · Repo: `tantra-ledger` · Branch: `main`
 
 ## Phase / Slice Status (COMPLETE)
+
+- **Plan 0005 — settlement, corporate actions & statutory fees** (T2.7–T2.11):
+  - **T2.7** `ClearingCalendar::new()` is now an **empty weekend-only
+    calendar** — the hardcoded NSE 2024–26 table (`add_nse_holidays_2024_2026`)
+    is deleted. Real holidays are injected via `with_holidays` by
+    `tantra-runtime-backtest::NseTradingCalendar` (the consumer & provider of
+    `ClearingCalendar`); the holiday data owner is `tantra-data` (new gap
+    `tantra-data/docs/gaps/0015-nse-trading-holiday-provider.md`).
+  - **T2.8** per-lot corporate actions: `adjust_lot_for_split` /
+    `adjust_lot_for_bonus` / `adjust_lot_for_demerger` /
+    `reduce_lot_for_demerger` + `AccountState::apply_corporate_actions_to_lots`
+    (positions rebuilt as projections over the lot book). FIFO `match_lots`
+    realizes the correct per-lot PnL after a split.
+  - **T2.9** per-segment (NFO/MCX/CDS) exchange turnover tables in
+    `tantra-market-finance::india::costs::segments` (exact Decimal, from the
+    researched circulars — see the plan appendix); `compute_charges` looks the
+    segment rate up and the NSE cash-segment fallback is removed. `stt_charge`
+    updated to the Finance Act 2026 rates (futures sell 0.05%, options sell
+    0.15% of premium, effective 2026-04-01).
+  - **T2.10** `GoldenTestRunner::compare_trade` switched onto `compute_charges`
+    (canonical track); the five sample fixtures re-based onto the canonical
+    track (real NSE turnover rate, options STT sell-side only, DP only on
+    delivery sells); golden report passes at the 1-paise tolerance.
+  - **T2.11** OMS context canvas wired: `validate_order_against_context`
+    (notional / configured qty / price collar vs `MarketData` / daily loss vs
+    `PortfolioRiskState`), `OrderStateMachine::submit_order_with_context`, and
+    a maintained `snapshot()` feeding `OmsSnapshot`.
+  - **Verification**: ledger workspace tests green (portfolio 47 incl. 10 new
+    per-lot + calendar tests, journal 50 incl. 5 golden + per-segment tests,
+    oms 38 incl. 13 new context tests), `cargo fmt --check` + `clippy
+    --workspace --all-targets --profile prod -- -D warnings` clean, no
+    `Utc::now()` in `crates/*/src/`, no production `src/` code calls the legacy
+    fee track, no hardcoded holiday table in the domain crate. Runtime backtest
+    + agent workspaces re-checked green. **API note**: `tantra-ledger-journal`
+    gains a `tantra-market-finance` dependency (cross-repo path, declared in
+    the ledger workspace dependencies); `stt_charge` futures/options rates
+    changed per Finance Act 2026.
 
 - **Plan 0003 — allocation phases 2–4** (`tantra-ledger-allocation`, commit
   `9f8ec22`):
@@ -57,10 +95,12 @@
 
 ## Immediate Next Step
 
-- T2.7–T2.11 (plan 0005, settlement & fee consolidation — Proposed, not
-  approved): external clearing-calendar source, per-lot corporate-action
-  adjustments, per-segment fee tables, canonical golden framework, OMS context
-  wiring. Do not start until the plan is approved.
+- **Plan 0005 complete (T2.7–T2.11).** The remaining upstream ledger follow-on
+  is `tantra-data/docs/gaps/0015-nse-trading-holiday-provider.md`: when
+  `tantra-data` ships the real NSE trading-holiday ingestion, wire
+  `tantra-runtime-backtest::NseTradingCalendar` to consume it (instead of its
+  own seeded list). All T2 gaps 0007–0011 are closed; the ledger has no open
+  gaps or plans.
 
 ## Operating Invariants
 

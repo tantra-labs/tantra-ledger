@@ -14,11 +14,7 @@ the remaining future work is enumerated below.
 
 | # | Title | Severity | Status | Plan |
 |---|-------|----------|--------|------|
-| [0007](0007-portfolio-hardcoded-nse-calendar.md) | Portfolio `ClearingCalendar::new()` hardcodes NSE holidays 2024–2026 | Medium | Open | [0005](../plans/0005-settlement-and-fee-consolidation.md) |
-| [0008](0008-portfolio-corporate-action-per-lot-cost-basis.md) | Corporate-action adjustments are aggregate-level, not per-lot | Medium | Open | [0005](../plans/0005-settlement-and-fee-consolidation.md) |
-| [0009](0009-journal-per-segment-fee-tables.md) | Journal exchange turnover fee tables fall back to NSE cash-segment rate for NFO/MCX/CDS | Medium | Open | [0005](../plans/0005-settlement-and-fee-consolidation.md) |
-| [0010](0010-journal-golden-framework-legacy-fees.md) | Golden contract-note framework runs on the legacy floor-rounded fee track | Low | Open | [0005](../plans/0005-settlement-and-fee-consolidation.md) |
-| [0011](0011-oms-context-types-unwired.md) | OMS context types (`OmsConfig`, `MarketData`, `PortfolioRiskState`) defined but not wired into validation | Medium | Open | [0005](../plans/0005-settlement-and-fee-consolidation.md) |
+| — | *(none)* | — | — | — |
 
 ## Closed Gaps
 
@@ -30,3 +26,8 @@ the remaining future work is enumerated below.
 | 0004 | Discrete / whole-share allocation not implemented | plan 0003 — `allocate_discrete` (iterative largest-remainder), `2026-11-13` |
 | 0005 | Performance `MetricsInput::new()` mints `as_of` via `Utc::now()` | plan 0004 — `as_of` required constructor arg; runtime call sites updated, `2026-11-13` |
 | 0006 | Performance edge score is a v1 placeholder formula | plan 0004 — v2 weighted spec (`EDGE_SCORE_VERSION = 2`), `2026-11-13` |
+| 0007 | Portfolio `ClearingCalendar::new()` hardcodes NSE holidays 2024–2026 | plan 0005 — `new()` is an empty weekend-only calendar; real holidays injected via `with_holidays` (provider `tantra-data` gap 0015, consumer `tantra-runtime-backtest::NseTradingCalendar`), `2026-11-13` |
+| 0008 | Corporate-action adjustments are aggregate-level, not per-lot | plan 0005 — per-lot `adjust_lot_for_*` + `AccountState::apply_corporate_actions_to_lots` (positions rebuilt as projections over the lot book), `2026-11-13` |
+| 0009 | Journal exchange turnover fee tables fall back to NSE cash-segment rate for NFO/MCX/CDS | plan 0005 — per-segment Decimal tables in `tantra-market-finance::india::costs::segments`; `compute_charges` looks the segment rate up, `2026-11-13` |
+| 0010 | Golden contract-note framework runs on the legacy floor-rounded fee track | plan 0005 — `GoldenTestRunner` switched onto `compute_charges`; fixtures re-based onto the canonical track (full pass at 1 paise), `2026-11-13` |
+| 0011 | OMS context types (`OmsConfig`, `MarketData`, `PortfolioRiskState`) defined but not wired into validation | plan 0005 — `validate_order_against_context` + `submit_order_with_context` + maintained `OmsSnapshot`, `2026-11-13` |

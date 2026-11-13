@@ -74,6 +74,28 @@ pub enum OrderError {
         /// The terminal state it reached.
         status: OrderStatus,
     },
+    /// Request notional (reference price × quantity) exceeds the configured
+    /// per-order notional ceiling (`OmsConfig::max_notional_per_order`).
+    #[error("notional {notional} exceeds the configured per-order limit of {max}")]
+    NotionalExceedsLimit {
+        /// The notional computed from the market reference price.
+        notional: Decimal,
+        /// The configured ceiling.
+        max: Decimal,
+    },
+    /// The worst-case band-edge fill price deviates from the market reference
+    /// beyond the configured price collar (`OmsConfig::price_collar_bps`).
+    #[error(
+        "price {requested} deviates from reference {reference} beyond the {collar_bps} bps collar"
+    )]
+    PriceCollarViolation {
+        /// The band-edge price (ask for a buy, bid for a sell).
+        requested: Decimal,
+        /// The market reference price (last trade).
+        reference: Decimal,
+        /// The configured collar half-width in basis points.
+        collar_bps: u32,
+    },
     /// A fill would push cumulative filled quantity beyond the confirmed target.
     #[error("fill for {order_id} would exceed target {target} (projected {filled})")]
     FillExceedsTarget {
@@ -409,6 +431,54 @@ impl OrderStateMachine {
         Ok(build_order_ack(request, now))
     }
 
+    /// Submit an order request validated against the OMS context canvas
+    /// (gap 0011): `OmsConfig`-driven `max_notional_per_order` /
+    /// `max_quantity_per_order` / `price_collar_bps` checks against
+    /// `MarketData`, and the configured daily-loss ceiling against
+    /// `PortfolioRiskState`, before the normal `submit_order` registration.
+    ///
+    /// # Errors
+    /// [`OrderError::NotionalExceedsLimit`],
+    /// [`OrderError::PriceCollarViolation`],
+    /// [`OrderError::QuantityExceedsLimit`],
+    /// [`OrderError::DailyLossLimitExceeded`], plus every `submit_order` error.
+    pub fn submit_order_with_context(
+        &mut self,
+        request: &OrderRequest,
+        now: DateTime<Utc>,
+        config: &OmsConfig,
+        market: Option<&MarketData>,
+        risk: Option<&PortfolioRiskState>,
+    ) -> Result<OrderAck, OrderError> {
+        validate_order_against_context(request, config, market, risk)?;
+        self.submit_order(request, now)
+    }
+
+    /// Point-in-time snapshot of the OMS counters, maintained from the live
+    /// order book (gap 0011): `total_orders` / `total_filled` /
+    /// `total_cancelled` are derived from the tracked entries. Commission,
+    /// fees and today's PnL are zero until a real charge/PnL feed exists — the
+    /// type is now consumed rather than dead code.
+    #[must_use]
+    pub fn snapshot(&self) -> OmsSnapshot {
+        OmsSnapshot {
+            total_orders: self.orders.len() as u64,
+            total_filled: self
+                .orders
+                .values()
+                .filter(|o| o.state == OrderStatus::Filled)
+                .count() as u64,
+            total_cancelled: self
+                .orders
+                .values()
+                .filter(|o| o.state == OrderStatus::Cancelled)
+                .count() as u64,
+            total_commission: Money::inr(Decimal::ZERO),
+            total_fees: Money::inr(Decimal::ZERO),
+            today_pnl: Money::inr(Decimal::ZERO),
+        }
+    }
+
     /// Cancel an active order. Terminal states are absorbing, so cancelling a
     /// `Filled` / `Rejected` / `Expired` order is invalid.
     ///
@@ -569,6 +639,121 @@ pub fn validate_order_params(
             max_loss,
         });
     }
+    Ok(())
+}
+
+/// Validate an order request against the OMS context canvas (gap 0011):
+/// the base [`validate_order_request`] checks plus the configurable
+/// `OmsConfig` controls that the previous canvas types declared but never
+/// enforced.
+///
+/// 1. **`max_quantity_per_order`** — the configured per-order ceiling
+///    (stricter than [`MAX_QUANTITY_PER_ORDER`]).
+/// 2. **`max_notional_per_order`** — reference price (ask for a buy, bid for
+///    a sell, else last) × quantity, checked against the configured ceiling.
+/// 3. **`price_collar_bps`** — the worst-case band-edge fill (ask for a buy,
+///    bid for a sell) must stay within `reference ± collar` of the last
+///    price, mirroring the `tantra-risk` price-collar contract
+///    (`docs/design/0002-reduce-only-contract.md`).
+/// 4. **`max_daily_loss`** — `PortfolioRiskState::today_pnl` below
+///    `-max_daily_loss` refuses the order.
+///
+/// When `market` is supplied it must be for the request's instrument,
+/// otherwise the request is rejected ([`OrderError::InvalidParameters`]).
+///
+/// # Errors
+/// - [`OrderError::InvalidParameters`] for a zero quantity or a market-data
+///   snapshot of a different instrument.
+/// - [`OrderError::QuantityExceedsLimit`] above the configured ceiling.
+/// - [`OrderError::NotionalExceedsLimit`] above the configured notional cap.
+/// - [`OrderError::PriceCollarViolation`] outside the configured collar.
+/// - [`OrderError::DailyLossLimitExceeded`] on the daily-loss breach.
+pub fn validate_order_against_context(
+    request: &OrderRequest,
+    config: &OmsConfig,
+    market: Option<&MarketData>,
+    risk: Option<&PortfolioRiskState>,
+) -> Result<(), OrderError> {
+    validate_order_request(request)?;
+
+    let qty = request.quantity.value();
+    if let Some(max_qty) = config.max_quantity_per_order
+        && qty > max_qty.value()
+    {
+        return Err(OrderError::QuantityExceedsLimit(request.quantity));
+    }
+
+    if let Some(md) = market {
+        if md.instrument != request.instrument {
+            return Err(OrderError::InvalidParameters);
+        }
+        if let Some(max_notional) = config.max_notional_per_order {
+            let reference = match request.side {
+                OrderSide::Buy => {
+                    if md.ask.value() > Decimal::ZERO {
+                        md.ask.value()
+                    } else {
+                        md.last.value()
+                    }
+                }
+                OrderSide::Sell => {
+                    if md.bid.value() > Decimal::ZERO {
+                        md.bid.value()
+                    } else {
+                        md.last.value()
+                    }
+                }
+            };
+            let notional = reference * qty;
+            if notional > max_notional {
+                return Err(OrderError::NotionalExceedsLimit {
+                    notional,
+                    max: max_notional,
+                });
+            }
+        }
+        if let Some(collar_bps) = config.price_collar_bps
+            && collar_bps > 0
+            && md.last.value() > Decimal::ZERO
+        {
+            let reference = md.last.value();
+            let band_edge = match request.side {
+                OrderSide::Buy => {
+                    if md.ask.value() > Decimal::ZERO {
+                        md.ask.value()
+                    } else {
+                        reference
+                    }
+                }
+                OrderSide::Sell => {
+                    if md.bid.value() > Decimal::ZERO {
+                        md.bid.value()
+                    } else {
+                        reference
+                    }
+                }
+            };
+            let max_move = reference * Decimal::from(collar_bps) / Decimal::from(10_000);
+            if (band_edge - reference).abs() > max_move {
+                return Err(OrderError::PriceCollarViolation {
+                    requested: band_edge,
+                    reference,
+                    collar_bps,
+                });
+            }
+        }
+    }
+
+    if let Some(r) = risk
+        && let Some(max_loss) = config.max_daily_loss
+        && r.today_pnl.amount < -max_loss.amount
+    {
+        return Err(OrderError::DailyLossLimitExceeded {
+            today_pnl: r.today_pnl.amount,
+            max_loss: max_loss.amount,
+        });
+    }
+
     Ok(())
 }
 

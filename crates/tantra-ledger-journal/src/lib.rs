@@ -609,6 +609,10 @@ impl TaxCalculator {
     /// unconditionally whenever `delivery == false`, including on BUY
     /// orders. Real STT only ever charges Intraday/Futures/Options STT on
     /// the SELL leg; Delivery STT is charged on BOTH legs.
+    ///
+    /// Rates are the Finance Act 2026 schedule effective 2026-04-01
+    /// (NSE/FATAX/73524): futures sell 0.05% (raised from 0.02%) and options
+    /// sell 0.15% of premium (raised from 0.1%).
     pub fn stt_charge(side: OrderSide, product: ProductType, notional: Decimal) -> Decimal {
         if notional <= Decimal::ZERO {
             return Decimal::ZERO;
@@ -617,8 +621,8 @@ impl TaxCalculator {
         let rate = match product {
             ProductType::Delivery => Decimal::new(1, 3), // 0.1%, both sides
             ProductType::Intraday if is_sell => Decimal::new(25, 5), // 0.025%
-            ProductType::Futures if is_sell => Decimal::new(125, 6), // 0.0125%
-            ProductType::Options if is_sell => Decimal::new(625, 6), // 0.0625%
+            ProductType::Futures if is_sell => Decimal::new(5, 4), // 0.05%
+            ProductType::Options if is_sell => Decimal::new(15, 4), // 0.15% of premium
             _ => return Decimal::ZERO,
         };
         round_inr(notional * rate)
@@ -677,10 +681,12 @@ impl TaxCalculator {
     /// `notional = price * quantity`.
     ///
     /// Exchange selection maps the canonical [`tantra_core::Exchange`] onto
-    /// the two cash-segment turnover rates: `Exchange::Bse` uses the BSE
-    /// rate; every other segment — NSE plus the derivative segments NFO,
-    /// MCX and CDS — falls back to the NSE cash-segment rate until
-    /// per-segment fee tables arrive with real exchange data.
+    /// the per-segment exchange turnover tables: `Exchange::Nse` and
+    /// `Exchange::Bse` use the two cash-segment rates; the derivative
+    /// segments `Nfo`, `Mcx` and `Cds` look their per-side rate up from
+    /// `tantra-market-finance::india::costs::segments` (the Decimal tariff
+    /// tables fed by plan 0005's researched exchange circulars) keyed by
+    /// product — the NSE cash-segment fallback is gone (gap 0009).
     pub fn compute_charges(
         side: OrderSide,
         product: ProductType,
@@ -698,9 +704,23 @@ impl TaxCalculator {
         let stt = Self::stt_charge(side, product, notional);
         let stamp_duty = Self::stamp_duty_charge(side, product, notional);
         let exchange_turnover = match exchange {
+            tantra_core::Exchange::Nse => Self::nse_turnover_charges(notional),
             tantra_core::Exchange::Bse => Self::bse_turnover_charges(notional),
-            // NSE, NFO, MCX and CDS all fall back to the NSE cash-segment rate.
-            _ => Self::nse_turnover_charges(notional),
+            // NFO / MCX / CDS: per-segment rate from tantra-market-finance.
+            tantra_core::Exchange::Nfo
+            | tantra_core::Exchange::Mcx
+            | tantra_core::Exchange::Cds => {
+                let segment_product = if product == ProductType::Options {
+                    tantra_market_finance::india::costs::segments::SegmentProduct::Options
+                } else {
+                    tantra_market_finance::india::costs::segments::SegmentProduct::Futures
+                };
+                tantra_market_finance::india::costs::segments::exchange_turnover_charge(
+                    exchange,
+                    segment_product,
+                    notional,
+                )
+            }
         };
         let sebi_turnover = Self::sebi_fee(notional);
         let dp_charge = Self::dp_charge(side, product, is_first_sell_of_day);

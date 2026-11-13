@@ -476,7 +476,10 @@ fn test_corporate_action_after_fill_not_applied() {
 
 #[test]
 fn test_clearing_calendar_trading_day() {
-    let cal = ClearingCalendar::new();
+    // `new()` is an empty weekend-only calendar; a real NSE holiday is only a
+    // non-trading day when injected via `with_holidays` (gap 0007).
+    let republic_day_2026 = NaiveDate::from_ymd_opt(2026, 1, 26).unwrap(); // Monday
+    let cal = ClearingCalendar::with_holidays(&[republic_day_2026]);
 
     // Regular weekday should be trading day
     let wednesday = NaiveDate::from_ymd_opt(2026, 1, 7).unwrap(); // Wednesday
@@ -489,9 +492,8 @@ fn test_clearing_calendar_trading_day() {
     let sunday = NaiveDate::from_ymd_opt(2026, 1, 11).unwrap(); // Sunday
     assert!(!cal.is_trading_day(sunday));
 
-    // Republic Day (holiday) should not be trading day
-    let republic_day = NaiveDate::from_ymd_opt(2026, 1, 26).unwrap(); // Monday
-    assert!(!cal.is_trading_day(republic_day));
+    // Republic Day (injected holiday) should not be trading day
+    assert!(!cal.is_trading_day(republic_day_2026));
 }
 
 #[test]
@@ -511,7 +513,10 @@ fn test_clearing_calendar_settlement_date() {
 
 #[test]
 fn test_clearing_calendar_holiday_skip() {
-    let cal = ClearingCalendar::new();
+    // Real NSE holidays are injected reference data (gap 0007); the empty
+    // default has none.
+    let republic_day_2026 = NaiveDate::from_ymd_opt(2026, 1, 26).unwrap(); // Monday
+    let cal = ClearingCalendar::with_holidays(&[republic_day_2026]);
 
     // Trade on Thursday Jan 22, 2026 - settle on Friday Jan 23 (not a holiday)
     let thursday = NaiveDate::from_ymd_opt(2026, 1, 22).unwrap();

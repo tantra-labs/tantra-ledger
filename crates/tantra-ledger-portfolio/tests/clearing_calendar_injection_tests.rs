@@ -3,12 +3,12 @@
 //! table inside this crate (ported from `honba-kokoro-portfolio`
 //! `tests/clearing_calendar_injection_tests.rs` per migration guide Fix 3).
 //!
-//! `ClearingCalendar::new()` keeps its existing hardcoded NSE 2024-2026 table
-//! unchanged (the external unit tests depend on it).
+//! `ClearingCalendar::new()` now builds an **empty, weekend-only** calendar —
+//! the domain crate no longer owns any hardcoded NSE holiday table (gap 0007).
 //! `ClearingCalendar::with_holidays(&[NaiveDate])` is the constructor the
 //! downstream settlement layer uses: it builds a calendar purely from an
-//! injected holiday list, with no hardcoded table at all. This crate-side
-//! test only proves the injection mechanism with a synthetic holiday list.
+//! injected holiday list. This crate-side test only proves the injection
+//! mechanism with a synthetic holiday list.
 
 use chrono::NaiveDate;
 use tantra_ledger_portfolio::ClearingCalendar;
@@ -19,6 +19,18 @@ use tantra_ledger_portfolio::ClearingCalendar;
 fn synthetic_holiday() -> NaiveDate {
     // A Wednesday, otherwise an ordinary trading day.
     NaiveDate::from_ymd_opt(2027, 3, 10).unwrap()
+}
+
+#[test]
+fn test_new_is_empty_weekend_only_calendar() {
+    let cal = ClearingCalendar::new();
+    // A real NSE holiday (Republic Day, Mon Jan 26 2026) must NOT be a holiday
+    // in the empty default: real holidays are injected via `with_holidays`.
+    let republic_day_2026 = NaiveDate::from_ymd_opt(2026, 1, 26).unwrap();
+    assert!(cal.is_trading_day(republic_day_2026));
+    // Weekend exclusion still applies.
+    let saturday = NaiveDate::from_ymd_opt(2026, 1, 10).unwrap();
+    assert!(!cal.is_trading_day(saturday));
 }
 
 #[test]
@@ -64,8 +76,10 @@ fn test_settlement_date_skips_over_injected_holiday() {
 #[test]
 fn test_date_not_in_an_empty_injected_list_is_a_real_nse_holiday_elsewhere() {
     // Sanity check that `with_holidays` truly has NO hardcoded table: a real
-    // NSE holiday from `ClearingCalendar::new()`'s own hardcoded 2026 table
-    // (Republic Day, Jan 26 2026) must NOT be a holiday here unless injected.
+    // NSE holiday (Republic Day, Jan 26 2026) must NOT be a holiday here
+    // unless injected — the domain crate owns no holiday table at all (gap
+    // 0007; the data lives in tantra-data and is provided via the runtime
+    // `NseTradingCalendar`).
     let cal = ClearingCalendar::with_holidays(&[]);
     let republic_day_2026 = NaiveDate::from_ymd_opt(2026, 1, 26).unwrap(); // Monday
     assert!(cal.is_trading_day(republic_day_2026));

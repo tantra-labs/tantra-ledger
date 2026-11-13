@@ -7,6 +7,8 @@ description = "Double-entry general ledger and Indian statutory tax calculator (
 
 [dependencies]
 tantra-core = { workspace = true }
+# Per-segment (NFO/MCX/CDS) exchange turnover fee tables (gap 0009).
+tantra-market-finance = { workspace = true }
 chrono = { workspace = true }
 rust_decimal = { workspace = true }
 serde = { workspace = true }

@@ -47,15 +47,17 @@ pub struct ClearingCalendar {
 }
 
 impl ClearingCalendar {
-    /// Create a new clearing calendar with default NSE holidays.
+    /// Create a new clearing calendar with **no** hardcoded holiday table:
+    /// an empty, weekend-only calendar.
+    ///
+    /// Real exchange holidays are *reference data*, not domain logic, so they
+    /// are injected by the caller via [`ClearingCalendar::with_holidays`]. The
+    /// data owner is `tantra-data` (see
+    /// `tantra-data/docs/gaps/0015-nse-trading-holiday-provider.md`); the
+    /// consumer & provider of this calendar is the runtime backtesting
+    /// `NseTradingCalendar`, which seeds the real NSE holidays (gap 0007).
     pub fn new() -> Self {
-        let mut cal = Self {
-            trading_holidays: HashMap::new(),
-            settlement_holidays: HashMap::new(),
-        };
-        // Populate with known NSE holidays for 2024-2026
-        cal.add_nse_holidays_2024_2026();
-        cal
+        Self::with_holidays(&[])
     }
 
     /// Build a clearing calendar from an injected list of holiday dates,
@@ -81,88 +83,6 @@ impl ClearingCalendar {
         }
         cal.settlement_holidays = cal.trading_holidays.clone();
         cal
-    }
-
-    /// Add NSE trading and settlement holidays for 2024-2026.
-    fn add_nse_holidays_2024_2026(&mut self) {
-        // 2024 NSE Holidays
-        self.add_trading_holidays(
-            2024,
-            &[
-                "2024-01-26", // Republic Day
-                "2024-03-08", // Mahashivratri
-                "2024-03-25", // Holi
-                "2024-03-29", // Good Friday
-                "2024-04-11", // Id-Ul-Fitr (Ramzan Id)
-                "2024-04-17", // Ram Navami
-                "2024-05-01", // Maharashtra Day
-                "2024-06-17", // Bakri Id
-                "2024-07-17", // Muharram
-                "2024-08-15", // Independence Day
-                "2024-10-02", // Mahatma Gandhi Jayanti
-                "2024-11-01", // Diwali Laxmi Pujan
-                "2024-11-15", // Gurunanak Jayanti
-                "2024-12-25", // Christmas
-            ],
-        );
-
-        // 2025 NSE Holidays
-        self.add_trading_holidays(
-            2025,
-            &[
-                "2025-01-26", // Republic Day
-                "2025-02-26", // Mahashivratri
-                "2025-03-14", // Holi
-                "2025-03-31", // Id-Ul-Fitr
-                "2025-04-10", // Mahavir Jayanti
-                "2025-04-14", // Dr. Baba Saheb Ambedkar Jayanti
-                "2025-04-18", // Good Friday
-                "2025-05-01", // Maharashtra Day
-                "2025-06-07", // Bakri Id
-                "2025-07-06", // Muharram
-                "2025-08-15", // Independence Day
-                "2025-10-02", // Mahatma Gandhi Jayanti
-                "2025-10-21", // Diwali Laxmi Pujan
-                "2025-11-05", // Gurunanak Jayanti
-                "2025-12-25", // Christmas
-            ],
-        );
-
-        // 2026 NSE Holidays
-        self.add_trading_holidays(
-            2026,
-            &[
-                "2026-01-26", // Republic Day
-                "2026-02-15", // Mahashivratri
-                "2026-03-03", // Holi
-                "2026-03-20", // Id-Ul-Fitr
-                "2026-04-02", // Mahavir Jayanti
-                "2026-04-03", // Good Friday
-                "2026-04-14", // Dr. Baba Saheb Ambedkar Jayanti
-                "2026-05-01", // Maharashtra Day
-                "2026-05-27", // Bakri Id
-                "2026-06-26", // Muharram
-                "2026-08-15", // Independence Day
-                "2026-10-02", // Mahatma Gandhi Jayanti
-                "2026-11-08", // Diwali Laxmi Pujan
-                "2026-11-24", // Gurunanak Jayanti
-                "2026-12-25", // Christmas
-            ],
-        );
-
-        // Settlement holidays are typically the same as trading holidays
-        // but may differ (e.g., Saturday settlements)
-        self.settlement_holidays = self.trading_holidays.clone();
-    }
-
-    fn add_trading_holidays(&mut self, year: i32, dates: &[&str]) {
-        let mut holidays = Vec::new();
-        for d in dates {
-            if let Ok(date) = NaiveDate::parse_from_str(d, "%Y-%m-%d") {
-                holidays.push(date);
-            }
-        }
-        self.trading_holidays.insert(year, holidays);
     }
 
     /// Check if a date is a trading day (not weekend, not holiday).
@@ -776,6 +696,88 @@ pub fn adjust_for_demerger(
     })
 }
 
+/// Adjust a single FIFO [`TaxLot`] for a stock split.
+///
+/// Each lot's `quantity` and `remaining_quantity` are scaled by
+/// `numerator / denominator` and its `entry_price` is divided by the same
+/// ratio, preserving the lot's total cost basis exactly (zero-float Decimal
+/// arithmetic). This is the per-lot counterpart of [`adjust_for_split`]: the
+/// aggregate helper is a projection over the adjusted lot book.
+pub fn adjust_lot_for_split(lot: &mut TaxLot, ratio_numerator: u64, ratio_denominator: u64) {
+    if ratio_numerator == 0 || ratio_denominator == 0 {
+        return; // Invalid ratio, no adjustment
+    }
+    let ratio = Decimal::from(ratio_numerator) / Decimal::from(ratio_denominator);
+    lot.quantity = Quantity::new(lot.quantity.value() * ratio);
+    lot.remaining_quantity = Quantity::new(lot.remaining_quantity.value() * ratio);
+    lot.entry_price = Price::new(lot.entry_price.value() / ratio);
+}
+
+/// Adjust a single FIFO [`TaxLot`] for a bonus issue.
+///
+/// The lot receives `numerator / denominator` free shares for every share it
+/// holds: quantity and remaining quantity scale by `1 + ratio`, and the entry
+/// price is divided by the same factor so the lot's total cost basis is
+/// unchanged. Per-lot counterpart of [`adjust_for_bonus`].
+pub fn adjust_lot_for_bonus(lot: &mut TaxLot, ratio_numerator: u64, ratio_denominator: u64) {
+    if ratio_numerator == 0 || ratio_denominator == 0 {
+        return;
+    }
+    let ratio = Decimal::from(ratio_numerator) / Decimal::from(ratio_denominator);
+    let multiplier = Decimal::ONE + ratio;
+    lot.quantity = Quantity::new(lot.quantity.value() * multiplier);
+    lot.remaining_quantity = Quantity::new(lot.remaining_quantity.value() * multiplier);
+    lot.entry_price = Price::new(lot.entry_price.value() / multiplier);
+}
+
+/// Allocate a new demerged [`TaxLot`] out of an existing lot.
+///
+/// For every `allocation_numerator / allocation_denominator` new shares per
+/// held share, a new lot is created for `new_instrument` whose quantity is
+/// `lot.quantity * ratio`, remaining quantity `lot.remaining * ratio`, and
+/// entry price `lot.entry_price * cost_basis_allocation_pct / ratio`. The
+/// original lot's entry price is *not* modified here — the caller reduces it
+/// to `entry_price * (1 - pct)` via [`reduce_lot_for_demerger`].
+pub fn adjust_lot_for_demerger(
+    lot: &TaxLot,
+    new_instrument: InstrumentId,
+    allocation_numerator: u64,
+    allocation_denominator: u64,
+    cost_basis_allocation_pct: Decimal,
+) -> Option<TaxLot> {
+    if allocation_numerator == 0 || allocation_denominator == 0 {
+        return None;
+    }
+    let allocation_ratio =
+        Decimal::from(allocation_numerator) / Decimal::from(allocation_denominator);
+    let new_quantity = lot.quantity.value() * allocation_ratio;
+    if new_quantity <= Decimal::ZERO {
+        return None;
+    }
+    Some(TaxLot {
+        lot_id: format!("DEMERGER_{}", lot.lot_id),
+        account_id: lot.account_id.clone(),
+        instrument: new_instrument,
+        side: lot.side,
+        entry_price: Price::new(
+            lot.entry_price.value() * cost_basis_allocation_pct / allocation_ratio,
+        ),
+        quantity: Quantity::new(new_quantity),
+        remaining_quantity: Quantity::new(lot.remaining_quantity.value() * allocation_ratio),
+        entry_date: lot.entry_date,
+        created_at: lot.created_at,
+    })
+}
+
+/// Reduce an existing lot's cost basis after a demerger: the lot keeps
+/// `(1 - cost_basis_allocation_pct)` of its original per-share basis. Quantity
+/// is untouched (the original scrip keeps all its shares); per-lot counterpart
+/// of the aggregate `adjust_for_demerger`'s basis reduction.
+pub fn reduce_lot_for_demerger(lot: &mut TaxLot, cost_basis_allocation_pct: Decimal) {
+    let remaining_basis = lot.entry_price.value() * (Decimal::ONE - cost_basis_allocation_pct);
+    lot.entry_price = Price::new(remaining_basis);
+}
+
 /// Apply a corporate action to a position.
 /// Returns dividend income if applicable, and new position for demerger.
 pub fn apply_corporate_action(
@@ -926,6 +928,132 @@ impl AccountState {
                     HeldPosition::new(instrument, lot.side, lot.quantity, lot.entry_price)
                         .with_entry_date(lot.entry_date)
                         .with_updated_at(lot.created_at),
+                );
+            }
+        }
+    }
+
+    /// Apply every applicable corporate action (ex-date `<= as_of`) directly
+    /// onto the FIFO [`TaxLot`] book, keeping the aggregate [`HeldPosition`]s
+    /// as a projection over the adjusted lots. Returns the total dividend
+    /// income accrued.
+    ///
+    /// This is the per-lot fix for gap 0008: split/bonus/demerger scale each
+    /// lot's `quantity`/`remaining_quantity`/`entry_price` so downstream
+    /// `match_lots` realizes the correct per-lot PnL, instead of only touching
+    /// the aggregate position. Dividends accrue from each lot's
+    /// `remaining_quantity` (the lot's current exposure).
+    pub fn apply_corporate_actions_to_lots(
+        &mut self,
+        actions: &[CorporateAction],
+        as_of: NaiveDate,
+    ) -> Money {
+        let mut total_dividend = Money::inr(Decimal::ZERO);
+        for action in actions {
+            if action.ex_date() > as_of {
+                continue;
+            }
+            match action {
+                CorporateAction::Split {
+                    ratio_numerator,
+                    ratio_denominator,
+                    ..
+                } => {
+                    for lot in &mut self.lots {
+                        adjust_lot_for_split(lot, *ratio_numerator, *ratio_denominator);
+                    }
+                }
+                CorporateAction::Bonus {
+                    ratio_numerator,
+                    ratio_denominator,
+                    ..
+                } => {
+                    for lot in &mut self.lots {
+                        adjust_lot_for_bonus(lot, *ratio_numerator, *ratio_denominator);
+                    }
+                }
+                CorporateAction::Dividend {
+                    amount_per_share, ..
+                } => {
+                    for lot in &self.lots {
+                        let income =
+                            Decimal::from(*amount_per_share) * lot.remaining_quantity.value();
+                        total_dividend = Money::inr(total_dividend.amount + income);
+                    }
+                }
+                CorporateAction::Demerger {
+                    new_instrument,
+                    allocation_numerator,
+                    allocation_denominator,
+                    cost_basis_allocation_pct,
+                    ..
+                } => {
+                    let mut new_lots = Vec::new();
+                    for lot in &mut self.lots {
+                        if let Some(new_lot) = adjust_lot_for_demerger(
+                            lot,
+                            new_instrument.clone(),
+                            *allocation_numerator,
+                            *allocation_denominator,
+                            *cost_basis_allocation_pct,
+                        ) {
+                            new_lots.push(new_lot);
+                        }
+                        reduce_lot_for_demerger(lot, *cost_basis_allocation_pct);
+                    }
+                    self.lots.extend(new_lots);
+                }
+            }
+        }
+        self.rebuild_positions_from_lots();
+        total_dividend
+    }
+
+    /// Rebuild the aggregate [`HeldPosition`]s as a projection over the
+    /// [`TaxLot`] book: for every instrument held in lots, quantity is the sum
+    /// of the lots' `remaining_quantity` and entry price is the
+    /// remaining-quantity-weighted average of the lots' entry prices.
+    /// Positions for instruments that have lots but no position yet are
+    /// created; positions whose instrument has no lots are left as-is
+    /// (realized PnL, entry dates and update stamps are preserved).
+    fn rebuild_positions_from_lots(&mut self) {
+        let mut grouped: BTreeMap<InstrumentId, (Option<PositionSide>, Decimal, Decimal)> =
+            BTreeMap::new();
+        for lot in &self.lots {
+            let remaining = lot.remaining_quantity.value().max(Decimal::ZERO);
+            let entry = grouped.entry(lot.instrument.clone()).or_default();
+            entry.1 += remaining;
+            entry.2 += remaining * lot.entry_price.value();
+            entry.0 = Some(lot.side);
+        }
+        let latest_stamp = self
+            .lots
+            .iter()
+            .map(|lot| lot.created_at)
+            .max()
+            .unwrap_or(DateTime::<Utc>::UNIX_EPOCH);
+        for (instrument, (side, total_qty, weighted_basis)) in grouped {
+            let entry_price = if total_qty > Decimal::ZERO {
+                Price::new(weighted_basis / total_qty)
+            } else {
+                Price::ZERO
+            };
+            if let Some(pos) = self
+                .positions
+                .iter_mut()
+                .find(|p| p.instrument == instrument)
+            {
+                pos.quantity = Quantity::new(total_qty);
+                pos.entry_price = entry_price;
+            } else {
+                self.positions.push(
+                    HeldPosition::new(
+                        instrument,
+                        side.unwrap_or(PositionSide::Long),
+                        Quantity::new(total_qty),
+                        entry_price,
+                    )
+                    .with_updated_at(latest_stamp),
                 );
             }
         }

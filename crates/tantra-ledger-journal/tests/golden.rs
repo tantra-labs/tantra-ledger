@@ -4,11 +4,11 @@
 //! (fixed `now`, fixed tolerance): the calculated-vs-charged fields, the
 //! maximum per-trade deviation in paise, and the report's JSON round-trip.
 //!
-//! The sample fixtures record a broker's *reported* figures, which the
-//! legacy floor-based calculator reproduces exactly for the statutory
-//! fields but deviates from on `net_amount` (broker rounding conventions).
-//! The pinned deviations below are therefore part of the golden contract:
-//! a change in any statutory formula shows up as a different deviation.
+//! The runner validates the **canonical** track (`TaxCalculator::compute_charges`,
+//! plan 0005 gap 0010) — not the retired legacy floor-rounded track. The
+//! sample fixtures were re-based 2026-11-13 onto the canonical track, so the
+//! whole report passes at the 1-paise tolerance: a change in any statutory
+//! formula shows up as a different calculated value.
 
 use chrono::{DateTime, TimeZone, Utc};
 use rust_decimal::Decimal;
@@ -24,8 +24,7 @@ fn fixed_now() -> DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 1, 2, 9, 15, 0).unwrap()
 }
 
-/// All five built-in samples at the ₹50 (5000 paise) test tolerance: the
-/// source contract-note runner's own sampling tolerance.
+/// All five built-in samples at the given tolerance.
 fn full_sample_report(tolerance_paise: i64) -> tantra_ledger_journal::GoldenTestReport {
     GoldenTestRunner::new()
         .with_tolerance(Decimal::from(tolerance_paise))
@@ -45,6 +44,17 @@ fn test_golden_all_samples_pass_at_sampling_tolerance() {
     assert_eq!(report.failed, 0);
     assert_eq!(report.pass_rate(), 100.0);
     assert!(report.failed_trades().is_empty());
+}
+
+#[test]
+fn test_golden_all_samples_pass_at_one_paise() {
+    // Re-based onto the canonical track (gap 0010): the statutory fields and
+    // the net amount all reproduce the fixtures within 1 paise.
+    let report = full_sample_report(1);
+    assert_eq!(report.passed, 5);
+    assert_eq!(report.failed, 0);
+    assert!(report.stt_mismatches().is_empty());
+    assert!(report.net_amount_mismatches().is_empty());
 }
 
 #[test]
@@ -74,56 +84,38 @@ fn test_golden_statutory_fields_match_exactly() {
             assert_eq!(d, Decimal::from(dp), "{id} DP charges");
         };
 
-    // Zerodha delivery buy: 100 @ 2,50,000 paise turnover.
-    field("ZERODHA_DELIVERY_BUY_001", 25_000, 25, 25, 3_750, 369, 0);
-    // Zerodha intraday sell: 50 @ 75,000 paise turnover (exchange/SEBI → 7).
-    field("ZERODHA_INTRADAY_SELL_001", 1_875, 7, 7, 0, 182, 0);
-    // Upstox delivery buy: 200 @ 6,40,000 paise turnover.
-    field("UPSTOX_DELIVERY_BUY_001", 64_000, 64, 64, 9_600, 383, 0);
-    // Upstox option buy: 1 lot = 50 @ 7,500 ₹ turnover; buy side → no
-    // intraday STT for options in the legacy formula... the legacy
-    // `stt(false, ...)` applies the intraday rate to the BUY leg (0.025%).
-    field("UPSTOX_OPTION_BUY_001", 187, 0, 0, 112, 360, 0);
-    // Total-charges sample: 100 @ 2,00,000 paise turnover.
-    field("TOTAL_CHARGES_TEST_001", 20_000, 20, 20, 3_000, 367, 0);
+    // Zerodha delivery buy: 100 @ ₹2,500 (NSE, canonical NSE 0.00297% rate).
+    field("ZERODHA_DELIVERY_BUY_001", 25_000, 742, 25, 3_750, 498, 0);
+    // Zerodha intraday sell: 50 @ ₹1,500 (NSE).
+    field("ZERODHA_INTRADAY_SELL_001", 1_875, 223, 8, 0, 402, 0);
+    // Upstox delivery buy: 200 @ ₹3,200 (NSE).
+    field("UPSTOX_DELIVERY_BUY_001", 64_000, 1_901, 64, 9_600, 714, 0);
+    // Upstox option buy: 1 lot = 50 @ ₹150 premium (NFO) — options STT is
+    // sell-side only so a buy pays 0; the exchange charge uses the per-segment
+    // NFO 0.03553% premium rate (gap 0009).
+    field("UPSTOX_OPTION_BUY_001", 0, 266, 1, 22, 89, 0);
+    // Total-charges sample: 100 @ ₹2,000 (NSE); DP is zero on a buy.
+    field("TOTAL_CHARGES_TEST_001", 20_000, 594, 20, 3_000, 471, 0);
 }
 
 #[test]
-fn test_golden_max_deviation_paise_is_pinned() {
+fn test_golden_max_deviation_is_zero_at_one_paise() {
+    // Fully re-based: no field deviates from its fixture at the 1-paise
+    // tolerance (the canonical track IS the recorded contract note).
     let report = full_sample_report(1);
-    let mut maxes = report.results.iter().map(|r| {
-        (
-            r.trade_id.clone(),
-            r.max_deviation_paise,
-            r.net_amount_calculated,
-            r.net_amount_broker,
-        )
-    });
-
-    let mut case = |id: &str, deviation: &str| {
-        let (trade_id, max, calc, broker) = maxes.next().unwrap();
-        assert_eq!(&trade_id, id);
-        assert_eq!(max.to_string(), deviation, "{id} max deviation");
-        assert_ne!(calc, broker, "{id} net should deviate below tolerance 1");
-    };
-
-    case("ZERODHA_DELIVERY_BUY_001", "2150");
-    case("ZERODHA_INTRADAY_SELL_001", "1165");
-    case("UPSTOX_DELIVERY_BUY_001", "168");
-    case("UPSTOX_OPTION_BUY_001", "299");
-    case("TOTAL_CHARGES_TEST_001", "3612");
-}
-
-#[test]
-fn test_golden_at_one_paise_tolerance_every_net_mismatches_but_stt_never() {
-    let report = full_sample_report(1);
-    assert_eq!(report.passed, 0);
-    assert_eq!(report.failed, 5);
-    // Broker net_amount rounding conventions make the net figure deviate
-    // by more than 1 paise on every sample.
-    assert_eq!(report.net_amount_mismatches().len(), 5);
-    // The statutory STT formula reproduces every charged STT exactly.
-    assert!(report.stt_mismatches().is_empty());
+    for result in &report.results {
+        assert_eq!(
+            result.max_deviation_paise,
+            Decimal::ZERO,
+            "{}",
+            result.trade_id
+        );
+        assert_eq!(
+            result.net_amount_calculated, result.net_amount_broker,
+            "{}",
+            result.trade_id
+        );
+    }
 }
 
 #[test]

@@ -93,8 +93,8 @@ fn test_stt_futures_sell_only() {
     let buy = TaxCalculator::stt_charge(TradeSide::Buy, ProductType::Futures, dec!(100_000.00));
     let sell = TaxCalculator::stt_charge(TradeSide::Sell, ProductType::Futures, dec!(100_000.00));
     assert_eq!(buy, dec!(0.00));
-    // 100,000 * 0.0125% = 12.50
-    assert_eq!(sell, dec!(12.50));
+    // 100,000 * 0.05% = 50.00 (Finance Act 2026, effective 2026-04-01).
+    assert_eq!(sell, dec!(50.00));
 }
 
 #[test]
@@ -102,8 +102,8 @@ fn test_stt_options_sell_only() {
     let buy = TaxCalculator::stt_charge(TradeSide::Buy, ProductType::Options, dec!(100_000.00));
     let sell = TaxCalculator::stt_charge(TradeSide::Sell, ProductType::Options, dec!(100_000.00));
     assert_eq!(buy, dec!(0.00));
-    // 100,000 * 0.0625% = 62.50
-    assert_eq!(sell, dec!(62.50));
+    // 100,000 * 0.15% = 150.00 (Finance Act 2026, effective 2026-04-01).
+    assert_eq!(sell, dec!(150.00));
 }
 
 // ---------------------------------------------------------------------------
@@ -362,24 +362,71 @@ fn test_compute_charges_uses_bse_exchange_selection() {
 }
 
 #[test]
-fn test_compute_charges_derivative_segments_fall_back_to_nse_rate() {
-    // NFO / MCX / CDS have no dedicated rate table yet: they fall back to the
-    // NSE cash-segment rate (documented in `compute_charges`).
+fn test_compute_charges_uses_per_segment_rates_for_derivatives() {
+    // Gap 0009 (plan 0005): NFO / MCX / CDS now carry their own per-segment
+    // exchange turnover tables (fed from tantra-market-finance) instead of
+    // falling back to the NSE cash-segment rate. Futures charge on contract
+    // value, options on premium.
     let price = dec!(1000.00);
-    let qty = dec!(100);
-    for exchange in [Exchange::Nse, Exchange::Nfo, Exchange::Mcx, Exchange::Cds] {
-        let b = TaxCalculator::compute_charges(
-            TradeSide::Buy,
-            ProductType::Delivery,
-            exchange,
-            price,
-            qty,
-            false,
-        );
-        assert_eq!(
-            b.exchange_turnover,
-            dec!(2.97),
-            "{exchange:?} uses NSE rate"
-        );
-    }
+    let qty = dec!(100); // notional = 100,000
+
+    let nfo_futures = TaxCalculator::compute_charges(
+        TradeSide::Sell,
+        ProductType::Futures,
+        Exchange::Nfo,
+        price,
+        qty,
+        false,
+    );
+    assert_eq!(nfo_futures.exchange_turnover, dec!(1.83)); // 0.00183%
+
+    let nfo_options = TaxCalculator::compute_charges(
+        TradeSide::Sell,
+        ProductType::Options,
+        Exchange::Nfo,
+        price,
+        qty,
+        false,
+    );
+    assert_eq!(nfo_options.exchange_turnover, dec!(35.53)); // 0.03553% on premium
+
+    let mcx_futures = TaxCalculator::compute_charges(
+        TradeSide::Sell,
+        ProductType::Futures,
+        Exchange::Mcx,
+        price,
+        qty,
+        false,
+    );
+    assert_eq!(mcx_futures.exchange_turnover, dec!(2.10)); // 0.0021%
+
+    let mcx_options = TaxCalculator::compute_charges(
+        TradeSide::Sell,
+        ProductType::Options,
+        Exchange::Mcx,
+        price,
+        qty,
+        false,
+    );
+    assert_eq!(mcx_options.exchange_turnover, dec!(41.80)); // 0.0418% on premium
+
+    let cds_futures = TaxCalculator::compute_charges(
+        TradeSide::Sell,
+        ProductType::Futures,
+        Exchange::Cds,
+        price,
+        qty,
+        false,
+    );
+    assert_eq!(cds_futures.exchange_turnover, dec!(0.35)); // 0.00035%
+
+    let cds_options = TaxCalculator::compute_charges(
+        TradeSide::Sell,
+        ProductType::Options,
+        Exchange::Cds,
+        price,
+        qty,
+        false,
+    );
+    assert_eq!(cds_options.exchange_turnover, dec!(31.10)); // 0.0311% on premium
 }

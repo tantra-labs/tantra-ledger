@@ -15,7 +15,7 @@ use crate::TaxCalculator;
 use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
-use tantra_core::OrderSide;
+use tantra_core::{Exchange, OrderSide};
 
 /// Represents a single trade from a broker contract note
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -147,32 +147,32 @@ impl GoldenTestRunner {
     }
 
     fn compare_trade(&self, trade: &ContractNoteTrade) -> ComparisonResult {
-        let stt_calculated = TaxCalculator::stt(
-            matches!(trade.product_type, ProductType::Delivery),
-            trade.price,
+        // The canonical track (plan 0005 gap 0010): recompute the charges with
+        // `TaxCalculator::compute_charges` (exact Decimal, banker's 2dp) and
+        // compare against the re-based fixture values in paise. The fixture
+        // prices are paise-denominated, so the canonical rupee model divides
+        // by 100 first. The legacy floor-rounded track is retired from this
+        // runner; it survives only as test fixtures.
+        let exchange = parse_exchange(&trade.exchange).unwrap_or(Exchange::Nse);
+        let price_rupees = trade.price / Decimal::from(100);
+        let is_first_sell_of_day = matches!(trade.product_type, ProductType::Delivery)
+            && matches!(trade.side, OrderSide::Sell);
+        let breakdown = TaxCalculator::compute_charges(
+            trade.side,
+            trade.product_type,
+            exchange,
+            price_rupees,
             trade.quantity,
+            is_first_sell_of_day,
         );
+        let to_paise = |rupees: Decimal| rupees * Decimal::from(100);
 
-        let turnover = trade.price * trade.quantity;
-        let exchange_calculated = TaxCalculator::sebi_turnover_charges(turnover);
-        let sebi_calculated = TaxCalculator::sebi_turnover_charges(turnover);
-
-        let stamp_duty_calculated = TaxCalculator::stamp_duty(
-            trade.price,
-            trade.quantity,
-            matches!(trade.side, OrderSide::Buy),
-        );
-
-        let gst_calculated =
-            TaxCalculator::GST(trade.brokerage, exchange_calculated, sebi_calculated);
-
-        let dp_charges_calculated = if matches!(trade.product_type, ProductType::Delivery)
-            && matches!(trade.side, OrderSide::Sell)
-        {
-            TaxCalculator::dp_charges(true)
-        } else {
-            Decimal::ZERO
-        };
+        let stt_calculated = to_paise(breakdown.stt);
+        let exchange_calculated = to_paise(breakdown.exchange_turnover);
+        let sebi_calculated = to_paise(breakdown.sebi_turnover);
+        let stamp_duty_calculated = to_paise(breakdown.stamp_duty);
+        let gst_calculated = to_paise(breakdown.gst);
+        let dp_charges_calculated = to_paise(breakdown.dp_charge);
 
         let total_charges_calculated = trade.brokerage
             + stt_calculated
@@ -182,10 +182,11 @@ impl GoldenTestRunner {
             + gst_calculated
             + dp_charges_calculated;
 
+        let notional_paise = trade.price * trade.quantity;
         let net_amount_calculated = if matches!(trade.side, OrderSide::Buy) {
-            (trade.price * trade.quantity) + total_charges_calculated
+            notional_paise + total_charges_calculated
         } else {
-            (trade.price * trade.quantity) - total_charges_calculated
+            notional_paise - total_charges_calculated
         };
 
         let stt_match = (stt_calculated - trade.stt_charged).abs() <= self.tolerance_paise;
@@ -244,6 +245,19 @@ impl GoldenTestRunner {
                 && net_match,
             max_deviation_paise: max_deviation,
         }
+    }
+}
+
+/// Parse a contract-note exchange label into the canonical
+/// [`tantra_core::Exchange`]; unknown labels fall back to `Nse`.
+fn parse_exchange(label: &str) -> Option<Exchange> {
+    match label.to_ascii_uppercase().as_str() {
+        "NSE" => Some(Exchange::Nse),
+        "BSE" => Some(Exchange::Bse),
+        "NFO" | "F&O" => Some(Exchange::Nfo),
+        "MCX" => Some(Exchange::Mcx),
+        "CDS" => Some(Exchange::Cds),
+        _ => None,
     }
 }
 
@@ -527,6 +541,11 @@ pub fn generate_sample_csv(_broker: &str, count: usize, now: DateTime<Utc>) -> S
 /// Trade: Buy 100 RELIANCE @ ₹2,500.00 (Delivery).
 /// All rupee/paise amounts are the exact values recorded on the contract
 /// note, not runtime-derived.
+///
+/// Re-based 2026-11-13 onto the canonical track (`compute_charges`, plan 0005
+/// gap 0010): exchange charges now carry the real NSE 0.00297% turnover rate
+/// (₹742 paise) instead of the legacy SEBI-rate-sized figure, and GST follows
+/// the canonical taxable base.
 pub fn sample_zerodha_delivery_buy_trade(now: DateTime<Utc>) -> ContractNoteTrade {
     ContractNoteTrade {
         trade_id: "ZERODHA_DELIVERY_BUY_001".to_string(),
@@ -540,18 +559,19 @@ pub fn sample_zerodha_delivery_buy_trade(now: DateTime<Utc>) -> ContractNoteTrad
         product_type: ProductType::Delivery,
         brokerage: Decimal::from(2000),
         stt_charged: Decimal::from(25000),
-        exchange_charges: Decimal::from(25),
+        exchange_charges: Decimal::from(742),
         sebi_charges: Decimal::from(25),
         stamp_duty: Decimal::from(3750),
-        gst: Decimal::from(369),
+        gst: Decimal::from(498),
         dp_charges: Decimal::from(0),
-        net_amount: Decimal::from(25029019),
+        net_amount: Decimal::from(25032015),
         settle_date: NaiveDate::from_ymd_opt(2026, 1, 5).unwrap(),
     }
 }
 
 /// Fixed-sample broker fixture: Zerodha intraday sell.
 /// Trade: Sell 50 INFY @ ₹1,500.00 (Intraday).
+/// Re-based 2026-11-13 onto the canonical track (see the delivery-buy note).
 pub fn sample_zerodha_intraday_sell_trade(now: DateTime<Utc>) -> ContractNoteTrade {
     ContractNoteTrade {
         trade_id: "ZERODHA_INTRADAY_SELL_001".to_string(),
@@ -565,18 +585,19 @@ pub fn sample_zerodha_intraday_sell_trade(now: DateTime<Utc>) -> ContractNoteTra
         product_type: ProductType::Intraday,
         brokerage: Decimal::from(1000),
         stt_charged: Decimal::from(1875),
-        exchange_charges: Decimal::from(2),
-        sebi_charges: Decimal::from(2),
+        exchange_charges: Decimal::from(223),
+        sebi_charges: Decimal::from(8),
         stamp_duty: Decimal::from(0),
-        gst: Decimal::from(182),
+        gst: Decimal::from(402),
         dp_charges: Decimal::from(0),
-        net_amount: Decimal::from(7498094),
+        net_amount: Decimal::from(7496492),
         settle_date: NaiveDate::from_ymd_opt(2026, 1, 2).unwrap(),
     }
 }
 
 /// Fixed-sample broker fixture: Upstox delivery buy.
 /// Trade: Buy 200 TCS @ ₹3,200.00 (Delivery).
+/// Re-based 2026-11-13 onto the canonical track (see the delivery-buy note).
 pub fn sample_upstox_delivery_buy_trade(now: DateTime<Utc>) -> ContractNoteTrade {
     ContractNoteTrade {
         trade_id: "UPSTOX_DELIVERY_BUY_001".to_string(),
@@ -590,18 +611,21 @@ pub fn sample_upstox_delivery_buy_trade(now: DateTime<Utc>) -> ContractNoteTrade
         product_type: ProductType::Delivery,
         brokerage: Decimal::from(2000),
         stt_charged: Decimal::from(64000),
-        exchange_charges: Decimal::from(19),
+        exchange_charges: Decimal::from(1901),
         sebi_charges: Decimal::from(64),
         stamp_duty: Decimal::from(9600),
-        gst: Decimal::from(360),
+        gst: Decimal::from(714),
         dp_charges: Decimal::from(0),
-        net_amount: Decimal::from(64075943),
+        net_amount: Decimal::from(64078279),
         settle_date: NaiveDate::from_ymd_opt(2026, 1, 5).unwrap(),
     }
 }
 
 /// Fixed-sample broker fixture: Upstox F&O option buy.
 /// Trade: Buy 1 lot NIFTY 19000 CE @ ₹150.00 (Option Premium).
+/// Re-based 2026-11-13 onto the canonical track: options STT is sell-side
+/// only (0 on a buy), and the NFO exchange charge uses the per-segment
+/// 0.03553% premium rate (plan 0005 gap 0009).
 pub fn sample_upstox_option_buy_trade(now: DateTime<Utc>) -> ContractNoteTrade {
     ContractNoteTrade {
         trade_id: "UPSTOX_OPTION_BUY_001".to_string(),
@@ -614,19 +638,22 @@ pub fn sample_upstox_option_buy_trade(now: DateTime<Utc>) -> ContractNoteTrade {
         price: Decimal::from(15000),
         product_type: ProductType::Options,
         brokerage: Decimal::from(2000),
-        stt_charged: Decimal::from(187),
-        exchange_charges: Decimal::from(0),
-        sebi_charges: Decimal::from(0),
-        stamp_duty: Decimal::from(0),
-        gst: Decimal::from(360),
+        stt_charged: Decimal::from(0),
+        exchange_charges: Decimal::from(266),
+        sebi_charges: Decimal::from(1),
+        stamp_duty: Decimal::from(22),
+        gst: Decimal::from(89),
         dp_charges: Decimal::from(0),
-        net_amount: Decimal::from(752360),
+        net_amount: Decimal::from(752378),
         settle_date: NaiveDate::from_ymd_opt(2026, 1, 2).unwrap(),
     }
 }
 
 /// Fixed-sample broker fixture: total-charges reconciliation.
 /// Test case: Delivery buy 100 shares @ ₹2,000.
+/// Re-based 2026-11-13 onto the canonical track: the DP charge is zero (this
+/// is a buy — DP applies on delivery sells only), exchange charges carry the
+/// real NSE turnover rate.
 pub fn sample_total_charges_trade(now: DateTime<Utc>) -> ContractNoteTrade {
     ContractNoteTrade {
         trade_id: "TOTAL_CHARGES_TEST_001".to_string(),
@@ -640,12 +667,12 @@ pub fn sample_total_charges_trade(now: DateTime<Utc>) -> ContractNoteTrade {
         product_type: ProductType::Delivery,
         brokerage: Decimal::from(2000),
         stt_charged: Decimal::from(20000),
-        exchange_charges: Decimal::from(20),
+        exchange_charges: Decimal::from(594),
         sebi_charges: Decimal::from(20),
         stamp_duty: Decimal::from(3000),
-        gst: Decimal::from(360),
-        dp_charges: Decimal::from(1593),
-        net_amount: Decimal::from(20029019),
+        gst: Decimal::from(471),
+        dp_charges: Decimal::from(0),
+        net_amount: Decimal::from(20026085),
         settle_date: NaiveDate::from_ymd_opt(2026, 1, 5).unwrap(),
     }
 }

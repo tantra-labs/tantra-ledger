@@ -22,6 +22,10 @@ repository = "https://github.com/tantra-labs/tantra-ledger"
 # calling `Utc::now()` inside the domain.
 [workspace.dependencies]
 tantra-core = { path = "../tantra-core" }
+# Per-segment (NFO/MCX/CDS) exchange turnover fee tables (ledger plan 0005,
+# gap 0009): the domain heart reads segment rates from tantra-market-finance
+# instead of hardcoding or falling back to the NSE cash-segment rate.
+tantra-market-finance = { path = "../tantra-market/crates/tantra-market-finance" }
 tantra-ledger = { path = "crates/tantra-ledger" }
 tantra-ledger-oms = { path = "crates/tantra-ledger-oms" }
 tantra-ledger-portfolio = { path = "crates/tantra-ledger-portfolio" }

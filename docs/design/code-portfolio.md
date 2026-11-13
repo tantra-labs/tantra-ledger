@@ -32,12 +32,12 @@ When a closing fill arrives, `AccountState::match_lots(&LotFill)`:
 
 | Type / Function | Purpose |
 |-----------------|---------|
-| `ClearingCalendar` | NSE/BSE trading and settlement holidays; `is_trading_day`, `is_settlement_day`, `settlement_date` (T+1 business day), `next/prev_trading_day`. `new()` seeds a hardcoded 2024–2026 NSE table (see [`docs/gaps/0007-portfolio-hardcoded-nse-calendar.md`](../gaps/0007-portfolio-hardcoded-nse-calendar.md)); `with_holidays` injects an external holiday list. |
+| `ClearingCalendar` | NSE/BSE trading and settlement holidays; `is_trading_day`, `is_settlement_day`, `settlement_date` (T+1 business day), `next/prev_trading_day`. `new()` builds an empty weekend-only calendar (plan 0005, gap 0007 — the domain crate owns no holiday table); `with_holidays` injects the external holiday list that `tantra-runtime-backtest::NseTradingCalendar` provides from the `tantra-data` holiday data. |
 | `Product` | Execution product taxonomy: `Delivery`, `Intraday`, `CoverOrder`, `BracketOrder`; `requires_settlement()` is true only for `Delivery`. |
 | `DematHoldings` | Free vs blocked holdings, unsettled receivables/payables, `block_for_settlement`, `settle_receivable`. |
 | `SettlementEngine` | Builds `SettlementInstruction`s from fills (`create_instruction`) and processes due settlements (`process_settlements`). |
 | `Fill` / `SettlementInstruction` | Fill event and settlement instruction records (broker/execution layer shapes). |
-| `CorporateAction` | `Split`, `Bonus`, `Dividend`, `Demerger` with ex-date; `apply_corporate_action` dispatches to `adjust_for_split`, `adjust_for_bonus`, `record_dividend`, `adjust_for_demerger`. Aggregate-level approximations — per-lot cost-basis adjustment is a follow-on (see [`docs/gaps/0008-portfolio-corporate-action-per-lot-cost-basis.md`](../gaps/0008-portfolio-corporate-action-per-lot-cost-basis.md)). |
+| `CorporateAction` | `Split`, `Bonus`, `Dividend`, `Demerger` with ex-date; aggregate helpers (`apply_corporate_action` → `adjust_for_split`, `adjust_for_bonus`, `record_dividend`, `adjust_for_demerger`) remain as projections, while `AccountState::apply_corporate_actions_to_lots` adjusts every `TaxLot` per-lot (split/bonus/demerger scale quantity + entry price, dividend accrues from remaining quantity) so FIFO `match_lots` realizes the correct cost basis (plan 0005, gap 0008). |
 | `settle_trades` | Trade-based T+1 settlement across a `PortfolioState` (cash movements, position changes). |
 | `compute_capital_gains` / `CapitalGainType` / `TaxSummary` | FIFO capital gains with holding-period awareness; `TaxSummary::from_fills` builds a period summary applying corporate actions before FIFO cost basis. |
 
