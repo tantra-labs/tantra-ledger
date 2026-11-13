@@ -23,29 +23,32 @@ The file-by-file mapping is in [`code-migration-map.md`](code-migration-map.md).
 |-------|---------|-----------|
 | `tantra-ledger-allocation` (mean-variance + risk parity, Phase 1) | Complete | `b35a314`, `436a2d8`, `53de244` |
 | `tantra-ledger-performance` (annotations, metrics, calendar, compare) | Complete | `b7d7fec`, `2a3a04e`, `1b7fb97` |
+| `tantra-ledger-allocation` plan 0003 (Hrp, Black-Litterman, exact bounds, discrete allocation) | Complete | this change |
+| `tantra-ledger-performance` plan 0004 (deterministic `MetricsInput`, edge score v2) | Complete | this change |
 | Docs: per-crate code references + implementation record | Complete | this change |
 
-## Verification (2026-11-12, `--profile prod`)
+## Verification (2026-11-13, `--profile prod`)
 
 ```bash
 grep -rn "#\[cfg(test)\]" crates/*/src/   # zero inline tests in production source
+grep -rn "Utc::now" crates/*/src/         # zero wall-clock queries in production source
 cargo fmt --check
 cargo clippy --workspace --all-targets --profile prod -- -D warnings
-cargo test --workspace --profile prod     # 182 tests, all passing
+cargo test --workspace --profile prod     # 200 tests, all passing
 ```
 
 - Zero inline `#[cfg(test)]` blocks in `crates/*/src/` (all tests live in
   `tests/` parallel to `src/`).
+- Zero `Utc::now()` in `crates/*/src/` (plan 0004 removed the last one — the
+  only wall-clock query in the whole workspace's domain sources).
 - Test distribution: facade 4, OMS 25, portfolio 36 (23 + 7 + 6), journal 58
-  (18 + 27 + 8 + 5, incl. proptest invariants), allocation 17, performance 42
-  (10 + 10 + 12 + 6 + 4). Total **182**.
+  (18 + 27 + 8 + 5, incl. proptest invariants), allocation 32, performance 45
+  (10 + 10 + 15 + 6 + 4). Total **200**.
 
 ## Open future work
 
 All open items now live in [`docs/gaps/`](../gaps/README.md) and
-[`docs/plans/`](../plans/README.md) — notably the allocation engine Phases 2–4
-(Hrp, Black-Litterman, exact bounds, discrete allocation), the performance
-journal v2 (temporal-determinism fix, real edge-score formula), and settlement
-& statutory-fee consolidation (external NSE calendar, per-lot corporate
-actions, per-segment fee tables, canonical golden framework, OMS context
-wiring).
+[`docs/plans/`](../plans/README.md) — the remaining settlement &
+statutory-fee consolidation plan 0005: external NSE calendar, per-lot
+corporate actions, per-segment fee tables, canonical golden framework, and
+OMS context wiring.

@@ -39,9 +39,9 @@ sorted deterministic iteration and `StoreError` (`AccountNotFound`,
 `src/metrics.rs`:
 
 - `MetricsInput { closed_trades, open_trades, equity_curve, as_of }` —
-  `as_of` is caller-injected; the `new()` convenience defaults it to
-  `Utc::now()`, which is tracked as
-  [gap 0005](../gaps/0005-performance-metrics-clock-query.md).
+  `as_of` is a **required** constructor argument (`MetricsInput::new(trades,
+  as_of)`); no wall-clock query exists in this crate (plan 0004 — the only
+  `Utc::now()` in the workspace's `crates/*/src/` was removed here).
 - `compute_metrics(input)` → `PerformanceMetrics`: total/closed/open trades,
   wins/losses/breakevens, net/gross PnL, fees, win rate, day win rate, trading
   days, profit factor (with an explicit `is_infinite` flag), avg win/loss,
@@ -51,11 +51,13 @@ sorted deterministic iteration and `StoreError` (`AccountNotFound`,
   trades-with-risk.
 - `compute_edge_score(metrics)` → `EdgeScore { version, score, components,
   closed_trades }` — composite 0–100; `None` until `MIN_CLOSED_TRADES_FOR_SCORE`
-  (5) closed trades. The six components (win rate, profit factor, avg
-  win/loss, drawdown, recovery, consistency) are scored 0–100 and blended with
-  equal weights — a documented **v1 placeholder formula** (LuxAlgo's proprietary
-  weighting is not reverse-engineered), tracked as
-  [gap 0006](../gaps/0006-performance-edge-score-v1-placeholder.md).
+  (5) closed trades; `EDGE_SCORE_VERSION = 2`. The six components (win rate,
+  profit factor, avg win/loss, drawdown, recovery, consistency) are scored
+  0–100 on documented brackets (`score_payoff_ratio` maps payoff ratios
+  0.5 → 0, 1 → 50, ≥ 2 → 100) and blended with the documented
+  `EDGE_WEIGHT_*` weights (profit factor 0.25, win rate 0.20, drawdown 0.20,
+  avg win/loss 0.15, recovery 0.10, consistency 0.10), replacing the v1
+  equal-weight placeholder formula.
 
 ## Phase 3 — daily P&L calendar & account comparison
 

@@ -3,16 +3,18 @@
 Documents `crates/tantra-ledger-allocation/src/lib.rs`: pure, zero-I/O,
 deterministic portfolio allocation producing `TargetWeights` (instrument →
 target weight mappings). It never places an order — a caller (eventually
-`tantra-exec` or a strategy layer) would turn the weights into orders.
+`tantra-exec` or a strategy layer) would turn the weights into orders. It
+also exposes the discrete / whole-share allocator [`allocate_discrete`] that
+maps continuous weights onto an executable lot book.
 
-## Phase 1 Scope
+## Objectives
 
 | Objective | Status | Description |
 |-----------|--------|-------------|
-| `AllocationObjective::MeanVariance` | Implemented | Markowitz tangency maximizing `(μᵀw − r_f) / √(wᵀΣw)` — solves `Σ·w = μ − r_f` by Gaussian elimination, normalizes, projects into the box. |
-| `AllocationObjective::RiskParity` | Implemented | Equal risk contribution: `wᵢ(Σw)ᵢ` equal across instruments — damped fixed-point iteration (α = 0.5). |
-| `AllocationObjective::Hrp` | Declared, `NotImplemented` | Hierarchical Risk Parity — Phase 2, [gap 0001](../gaps/0001-allocation-hrp-not-implemented.md). |
-| `AllocationObjective::BlackLitterman` | Declared, `NotImplemented` | Black-Litterman blended — Phase 3, [gap 0002](../gaps/0002-allocation-black-litterman-not-implemented.md). |
+| `AllocationObjective::MeanVariance` | Implemented | Markowitz tangency maximizing `(μᵀw − r_f) / √(wᵀΣw)` — solves `Σ·w = μ − r_f` by Gaussian elimination, normalizes; box constraints are enforced by projected-gradient Sharpe maximization over the bounded simplex. |
+| `AllocationObjective::RiskParity` | Implemented | Equal risk contribution: `wᵢ(Σw)ᵢ` equal across instruments — damped fixed-point iteration (α = 0.5) with an exact bounded-simplex projection per iterate. |
+| `AllocationObjective::Hrp` | Implemented | Hierarchical Risk Parity (López de Prado) — correlation-distance single-linkage dendrogram, quasi-diagonalization, recursive-bisection risk allocation, all in `Decimal`. |
+| `AllocationObjective::BlackLitterman` | Implemented | View-blended posterior: `π = τ·Σ·w_mkt` prior, `μ_post = ((τΣ)⁻¹ + PᵀΩ⁻¹P)⁻¹·((τΣ)⁻¹π + PᵀΩ⁻¹q)`, posterior tangency normalized to sum 1. |
 
 ### Constraint
 
@@ -39,31 +41,39 @@ Builds optimization input from `tantra-ledger-portfolio`:
   within `1e-9` tolerance).
 - Custom JSON serialization: emitted as a sorted array of `{instrument, weight}`
   entries (an `InstrumentId` is a struct, not a valid JSON object key).
+  `BlackLittermanViews` serializes its `market_weights` the same way.
 
 ## Zero-floats & determinism
 
 All weights, bounds, returns, and covariance entries are exact
 `rust_decimal::Decimal`. Matrix inversion (Gaussian elimination with partial
-pivoting), risk-parity fixed point, and bound projection all run in `Decimal`
-(no `f32`/`f64` even as intermediates). No network, filesystem, or clock
-queries; `as_of` is injected explicitly by the caller.
+pivoting), risk-parity fixed point, hierarchical clustering, Black-Litterman
+blending, and the bounded-simplex projection all run in `Decimal` (no
+`f32`/`f64` even as intermediates). No network, filesystem, or clock queries;
+`as_of` is injected explicitly by the caller.
 
-## Bound handling (documented Phase 1 simplification)
+## Bound handling (exact bounded-simplex projection)
 
-`optimize()` solves the unconstrained optimum in exact arithmetic, then
-projects into the box via iterative clip-and-renormalize: clip each weight to
-`[min, max]`, re-scale the strictly-in-bound weights so the portfolio re-sums
-to 1, repeat until stable (or fail with `InfeasibleConstraints` if nothing
-free remains). An exact bound-constrained QP solver is a follow-on — see
-[gap 0003](../gaps/0003-allocation-exact-bound-constrained-qp.md).
-Discrete/whole-share allocation is Phase 4 — see
-[gap 0004](../gaps/0004-allocation-discrete-whole-share.md).
+`project_box_simplex` water-fills the box `{min ≤ w ≤ max, Σw = 1}` by binary
+search on the single Lagrange parameter — the exact projection onto the
+feasible set. The objectives enforce bounds with projected iterations
+(mean-variance: projected-gradient Sharpe ascent with backtracking line
+search; risk parity: projected fixed point; HRP: projection of the bisection
+weights). This replaced the Phase 1 clip-and-renormalize heuristic, which did
+not return the true constrained optimum for correlated universes.
+
+## Discrete / whole-share allocation
+
+`allocate_discrete(target, equity, prices, lot_sizes)` maps continuous
+`TargetWeights` onto whole-lot `Quantity`s: floor each target notional to
+whole lots, then spend residual cash one lot at a time on the largest
+fractional remainders (iterative largest-remainder / Hamilton rounding,
+deterministic in `Decimal`). The book never exceeds `equity`; the unspent
+residual is documented to remain as cash.
 
 ## Related
 
 - `tantra-ledger-portfolio` — `PortfolioState`, `Marks` (read-adapter source).
 - `tantra-core::quant` — returns/covariance primitives (source for
   `expected_returns`/`covariance`).
-- Phase 2–4 work is planned in
-  [`docs/plans/0003-allocation-phase-2-4.md`](../plans/0003-allocation-phase-2-4.md).
-- Tests: `crates/tantra-ledger-allocation/tests/optimize_tests.rs` (17).
+- Tests: `crates/tantra-ledger-allocation/tests/optimize_tests.rs` (32).
