@@ -3,9 +3,17 @@
 **Status**: T2 track complete — plans 0003 (allocation phases 2–4), 0004
 (performance determinism & edge score v2), and 0005 (settlement, corporate
 actions & statutory-fee consolidation) implemented; gaps 0001–0011 closed.
-**Date**: 2026-11-13 · Repo: `tantra-ledger` · Branch: `main`
+**Date**: 2026-11-14 · Repo: `tantra-ledger` · Branch: `main`
 
 ## Phase / Slice Status (COMPLETE)
+
+- **MPO (2026-11-14, gap 0013 closed)** — multi-period optimizer in
+  `tantra-ledger-allocation/src/mpo.rs`: `multi_period_optimize` (per-period
+  box-constrained solve via the existing `optimize`/`project_box_simplex`, optional
+  L1 turnover cap per period, friction = `transaction_cost·turnover² +
+  turnover_penalty·turnover`), `MpoConfig`/`MpoStep`/`MpoResult`, 6 tests in
+  `tests/mpo_tests.rs` (38 allocation tests total). Consumed by the MCP gateway tool
+  `tantra_multi_period_optimize` (`tantra-agent-mcp`). Commit `126087f`.
 
 - **Plan 0005 — settlement, corporate actions & statutory fees** (T2.7–T2.11):
   - **T2.7** `ClearingCalendar::new()` is now an **empty weekend-only
