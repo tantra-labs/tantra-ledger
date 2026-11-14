@@ -23,6 +23,13 @@
 //! heuristic, and the discrete / whole-share allocator
 //! [`allocate_discrete`].
 //!
+//! # Multi-period optimization (plan 0007 Track 4 Phase 11 — gap 0013)
+//!
+//! [`multi_period_optimize`] sequences a rebalance over `T` periods under an
+//! optional per-period L1 turnover cap and quadratic transaction costs —
+//! the domain foundation for the future MCP gateway tool
+//! `tantra_multi_period_optimize`. See [`mpo`] for the algorithm.
+//!
 //! # Zero-floats discipline
 //!
 //! All weights, bounds, returns, and covariance entries are exact
@@ -51,6 +58,10 @@ use std::collections::BTreeMap;
 use thiserror::Error;
 
 pub use tantra_core::{InstrumentId, Money, Price, Quantity};
+
+pub mod mpo;
+
+pub use mpo::{MpoConfig, MpoResult, MpoStep, multi_period_optimize};
 
 /// Convergence tolerance for the numerical loops (risk parity fixed point,
 /// clip-and-renormalize): `1e-9`.
