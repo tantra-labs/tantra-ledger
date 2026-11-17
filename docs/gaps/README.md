@@ -14,12 +14,13 @@ the remaining future work is enumerated below.
 
 | # | Title | Severity | Status | Plan |
 |---|-------|----------|--------|------|
-| [0012](0012-bracket-order-oms-lifecycle.md) | No bracket-order (SL/TSL) OMS lifecycle — entry + SL/target child orders, TSL modify events, stop-trigger close (Elephant Edge EE+) | High | Open | root `docs/plans/0005` |
+| _(none)_ | — | — | — | — |
 
 ## Closed Gaps
 
 | # | Title | Closed In |
 |---|-------|-----------|
+| 0012 | No bracket-order (SL/TSL) OMS lifecycle — entry + SL/target child orders, TSL modify events, stop-trigger close (Elephant Edge EE+) | Closed 2026-11-17 (T12.7, `1e296d7`): `BracketOrder` aggregate + `BracketId` + `BracketEvent` (EntryFilled/StopMoved/PartialExit/StopTriggered/Closed) — `new` (stop-side validation), `on_entry_fill`, `apply_stop_update` (never-widen + qty ≤ open → `StopWidening`/`StopQtyExceedsOpen`), `on_partial_exit` (short-flip guard + FIFO target removal), `on_stop_trigger` (exact-Decimal realized PnL), `apply_fill_to_bracket` routing; `OmsSnapshot.open_brackets: Vec<BracketView>` (serde-defaulted); new `OrderError` variants. Tests `bracket_tests` (12) + `bracket_snapshot_tests` (4) + `bracket_proptest`; 55 passed. Follow-on: FIFO P&L realization via `portfolio.apply_fill` (oms crate has no portfolio dep yet). |
 | 0001 | Allocation `Hrp` objective declared but not implemented | plan 0003 — HRP solver (correlation-distance single linkage, quasi-diagonalization, recursive bisection), `2026-11-13` |
 | 0002 | Allocation `BlackLitterman` objective declared but not implemented | plan 0003 — `BlackLittermanViews`/`View` inputs + posterior blend, `2026-11-13` |
 | 0003 | Allocation bound handling is clip-and-renormalize, not exact bound-constrained QP | plan 0003 — `project_box_simplex` + projected Sharpe / projected fixed point / HRP projection, `2026-11-13` |
