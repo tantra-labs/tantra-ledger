@@ -25,10 +25,16 @@
 
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use tantra_core::{Money, OrderAck, OrderRequest, Quantity};
 use thiserror::Error;
 use uuid::Uuid;
+
+mod bracket;
+
+pub use bracket::{BracketEvent, BracketId, BracketOrder, BracketView};
 
 // ——————————————————————————————————————————————————————————————————————————
 // Canonical vocabulary (re-exported so downstream gates import only this crate)
@@ -112,6 +118,32 @@ pub enum OrderError {
     /// Broker / venue plumbing failure surfaced through the OMS.
     #[error("broker error: {0}")]
     BrokerError(String),
+    /// A bracket-order aggregate failed construction or a lifecycle invariant
+    /// (gap 0012): stop on the wrong side of the entry, non-positive target
+    /// quantity, duplicate/re-mismatched entry fill, or an operation on a
+    /// closed bracket.
+    #[error("invalid bracket: {0}")]
+    InvalidBracket(String),
+    /// A trailing-stop update would widen the protective stop (mirrors
+    /// `tantra-risk` gap 0005): a long stop may only tighten upward
+    /// (`new >= current`), a short stop may only tighten downward
+    /// (`new <= current`).
+    #[error("stop widening refused: {new} would widen the current stop {current}")]
+    StopWidening {
+        /// The resting stop before the update.
+        current: Price,
+        /// The requested stop that would widen the protective level.
+        new: Price,
+    },
+    /// A stop-quantity update exceeds the remaining open quantity (or is
+    /// negative) — a resting stop over-selling the closed partial quantity
+    /// would flip the net position short.
+    #[error("stop quantity must be non-negative and at most the open quantity")]
+    StopQtyExceedsOpen,
+    /// A partial exit would push the remaining open quantity below zero
+    /// (short-flip guard).
+    #[error("quantity mismatch: partial exit exceeds the open quantity")]
+    QuantityMismatch,
 }
 
 /// Attempted an illegal order-state transition.
@@ -171,7 +203,7 @@ pub struct OmsConfig {
 }
 
 /// Point-in-time snapshot of OMS-wide counters.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct OmsSnapshot {
     /// Orders registered so far.
     pub total_orders: u64,
@@ -185,6 +217,24 @@ pub struct OmsSnapshot {
     pub total_fees: Money,
     /// Realized PnL today.
     pub today_pnl: Money,
+    /// Open bracket-order aggregates (gap 0012), for the UI and chat tool
+    /// surface. Empty when the OMS tracks no open brackets.
+    #[serde(default)]
+    pub open_brackets: Vec<BracketView>,
+}
+
+impl Default for OmsSnapshot {
+    fn default() -> Self {
+        Self {
+            total_orders: 0,
+            total_filled: 0,
+            total_cancelled: 0,
+            total_commission: Money::inr(Decimal::ZERO),
+            total_fees: Money::inr(Decimal::ZERO),
+            today_pnl: Money::inr(Decimal::ZERO),
+            open_brackets: Vec::new(),
+        }
+    }
 }
 
 /// Portfolio state consumed by pre-submission risk checks.
@@ -476,6 +526,7 @@ impl OrderStateMachine {
             total_commission: Money::inr(Decimal::ZERO),
             total_fees: Money::inr(Decimal::ZERO),
             today_pnl: Money::inr(Decimal::ZERO),
+            open_brackets: Vec::new(),
         }
     }
 

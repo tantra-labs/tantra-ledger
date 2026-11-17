@@ -140,5 +140,7 @@ pub fn evaluate_risk_budget(portfolio: &Portfolio, risk_pct: Decimal) -> RiskBud
         max_portfolio_risk_pct: Some(max_portfolio_risk),
         min_lot_size: portfolio.min_lot_size,
         freeze_limit_qty: None,
+        max_weight_pct: None,
+        max_adv_pct: None,
     }
 }
