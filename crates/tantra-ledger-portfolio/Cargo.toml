@@ -13,6 +13,7 @@ serde = { workspace = true }
 
 [dev-dependencies]
 divan = "0.1"
+proptest = { workspace = true }
 
 [[bench]]
 name = "portfolio_benchmarks"

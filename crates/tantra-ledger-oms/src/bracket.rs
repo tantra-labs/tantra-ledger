@@ -33,7 +33,11 @@
 //! P&L realisation stays inside the bracket as bracket events (journal bracket
 //! P&L as bracket events) rather than FIFO tax-lot realisation: `portfolio`
 //! tax-lot accounting lives in `tantra-ledger-portfolio`, which this crate does
-//! not depend on.
+//! not depend on. The FIFO-consistency booking follow-on (plan 0005 T12.7,
+//! gap 0012) is exposed as [`BracketOrder::fifo_exits`] — the journaled exit
+//! legs as ordered `(price, qty)` tuples for the portfolio engine's
+//! `apply_bracket_exits` — so the account can book bracket P&L against its own
+//! tax lots without this crate depending on the portfolio.
 //!
 //! [`tantra_risk::trade_plan_gate::validate_stop_update`]: ../../../tantra-risk/crates/tantra-risk/src/trade_plan_gate.rs
 
@@ -482,6 +486,34 @@ impl BracketOrder {
     #[must_use]
     pub const fn remaining_qty(&self) -> Quantity {
         self.open_qty
+    }
+
+    /// The bracket's exit legs as ordered `(price, qty)` tuples for FIFO P&L
+    /// booking (gap 0012 follow-on, plan 0005 T12.7).
+    ///
+    /// A direct projection of the event journal: every journaled
+    /// [`BracketEvent::PartialExit`] and [`BracketEvent::StopTriggered`] in
+    /// fill order, normalized to `(price, qty)` so the portfolio engine
+    /// (`tantra_ledger_portfolio::apply_bracket_exits`) can consume them
+    /// without the portfolio crate depending on this OMS crate (portfolio is
+    /// L1 and must not depend on oms). The bracket keeps its own
+    /// single-anchored audit P&L (`realized_pnl_from_events`); this projection
+    /// feeds the account's FIFO-consistent booking, which can differ when the
+    /// account already holds earlier lots in the instrument.
+    ///
+    /// Pure and deterministic: byte-identical output for an identical event
+    /// journal, so the booking tuple stream always matches the bracket's own
+    /// audit events.
+    #[must_use]
+    pub fn fifo_exits(&self) -> Vec<(Price, Quantity)> {
+        self.events
+            .iter()
+            .filter_map(|event| match event {
+                BracketEvent::PartialExit { price, qty, .. }
+                | BracketEvent::StopTriggered { price, qty, .. } => Some((*price, *qty)),
+                _ => None,
+            })
+            .collect()
     }
 
     /// Read-only projection for the [`crate::OmsSnapshot`] surface.

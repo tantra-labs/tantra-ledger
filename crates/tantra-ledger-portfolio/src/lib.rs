@@ -29,6 +29,7 @@
 
 use chrono::{DateTime, Datelike, NaiveDate, Utc, Weekday};
 use rust_decimal::Decimal;
+use rust_decimal::prelude::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 
@@ -1308,6 +1309,62 @@ pub fn apply_fill_to_account(
             Money::inr(Decimal::ZERO)
         }
     }
+}
+
+/// FIFO-consistency booking for bracket-order exit legs (gap 0012 follow-on,
+/// plan 0005 T12.7): replay a bracket's `PartialExit` + `StopTriggered` exits
+/// through [`apply_fill_to_account`] so the account's realized P&L is booked
+/// against its FIFO cost basis instead of the bracket's single-anchored
+/// `(exit − entry) × qty` audit P&L. When the account already holds earlier
+/// lots in the same instrument, the two can differ — the FIFO booking
+/// realises the earlier lots' price advantage first.
+///
+/// `exits` are the bracket's exit legs in fill order as `(price, qty)` tuples
+/// (see `tantra_ledger_oms::BracketOrder::fifo_exits`; the OMS crate feeds
+/// this engine, never the other way around — portfolio is L1 and must not
+/// depend on oms). `side` is the bracket's entry-side position (`Long` for a
+/// buy bracket), so every exit is a closing fill against that side. Each exit
+/// is routed through [`apply_fill_to_account`], which realises P&L against the
+/// account's current cost basis; the total realized P&L is returned as exact
+/// `Decimal` `Money`.
+///
+/// Short-flip guard: an exit quantity is clamped to the account's currently
+/// available position in `instrument` on `side`, so a malformed or
+/// out-of-order exit stream can never drive the FIFO position negative or
+/// reverse it (the `BracketOrder` aggregate enforces the same invariant
+/// upstream via its own `QuantityMismatch` guard). Non-positive exits are
+/// no-ops; on an account with no position in the instrument the function is a
+/// safe no-op returning zero.
+pub fn apply_bracket_exits(
+    account: &mut AccountState,
+    instrument: &InstrumentId,
+    side: PositionSide,
+    exits: &[(Price, Quantity)],
+) -> Money {
+    let mut total = Money::inr(Decimal::ZERO);
+    for (price, qty) in exits {
+        if qty.value() <= Decimal::ZERO {
+            continue;
+        }
+        let available = account
+            .positions
+            .iter()
+            .find(|p| p.instrument == *instrument && p.side == side)
+            .map_or(Decimal::ZERO, |p| p.quantity.value());
+        let clamped = qty.value().min(available);
+        if clamped <= Decimal::ZERO {
+            continue;
+        }
+        // `apply_fill_to_account` is a whole-share (`u64`) fill API; bracket
+        // legs are whole-share quantities, so the truncating conversion is
+        // exact for every well-formed exit stream.
+        let Some(fill_qty) = clamped.to_u64() else {
+            continue;
+        };
+        let realized = apply_fill_to_account(account, instrument.clone(), side, fill_qty, *price);
+        total = Money::inr(total.amount + realized.amount);
+    }
+    total
 }
 
 /// Build a `HeldPosition` from a fill event, initializing entry price and FIFO lot tracking.

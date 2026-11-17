@@ -17,3 +17,7 @@ schemars = { version = "0.8", features = ["derive", "chrono", "rust_decimal"] }
 [dev-dependencies]
 proptest = { workspace = true }
 serde_json = { workspace = true }
+# Test-only FIFO-consistency booking bridge: `apply_bracket_exits` (gap 0012
+# T12.7 follow-on). Dev-only — the oms crate itself keeps zero dependency on
+# the portfolio engine (both are L1; portfolio must never depend on oms).
+tantra-ledger-portfolio = { workspace = true }
