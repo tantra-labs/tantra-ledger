@@ -33,8 +33,12 @@ use thiserror::Error;
 use uuid::Uuid;
 
 mod bracket;
+mod trade_manager;
 
 pub use bracket::{BracketEvent, BracketId, BracketOrder, BracketView};
+pub use trade_manager::{
+    ActiveTarget, ActiveTargetKind, TradeAction, TradeManager, TradeManagerEvent, TradeSnapshot,
+};
 
 // ——————————————————————————————————————————————————————————————————————————
 // Canonical vocabulary (re-exported so downstream gates import only this crate)
