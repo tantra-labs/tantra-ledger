@@ -57,10 +57,24 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use thiserror::Error;
 
-pub use tantra_core::{InstrumentId, Money, Price, Quantity};
+pub use tantra_core::{Currency, InstrumentId, Money, Price, Quantity};
 
+pub mod fire;
+pub mod fire_buckets;
 pub mod mpo;
 
+pub use fire::{
+    CashflowBucketConfig, ExpenseCategory, ExpenseInputMode, ExpenseItem, FireArchetypeCard,
+    FireArchetypeId, FireCrossoverMilestone, FireError, FirePlanConfig, FireSimulationReport,
+    PostFireCashflowReport, SorStressConfig, SorStressResult, TaxDragConfig, YearlyProjectionPoint,
+    calculate_coast_fire_corpus, calculate_fire_archetypes, effective_net_annual_return_pct,
+    run_sor_stress, simulate_fire_runway, simulate_fire_runway_with_extras,
+    simulate_post_fire_cashflow,
+};
+pub use fire_buckets::{
+    BucketClassifiedInstrument, FireBucketDrift, FireBucketDriftEntry, FireBucketKind,
+    FireGlidepathPolicy, allocate_fire_bucket_discrete, compute_bucket_drift,
+};
 pub use mpo::{MpoConfig, MpoResult, MpoStep, multi_period_optimize};
 
 /// Convergence tolerance for the numerical loops (risk parity fixed point,
