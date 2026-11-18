@@ -18,7 +18,7 @@ every remaining roadmap item is now a numbered gap under
 
 | # | Title | Target Scope | Status |
 |---|-------|--------------|--------|
-| — | *(none)* | — | — |
+| [0006](0006-fire-bucket-glidepath-and-swr-metrics.md) | FIRE Planning Engine, 3-Bucket Glidepath Allocation & SWR Metrics (`fire.rs`, `fire_buckets.rs`, `swr.rs` — zero `tantra-core` edits) | `tantra-ledger-allocation`, `tantra-ledger-performance` | Proposed (2026-11-18) — Track **T19.1** (P0 — primary L1 domain owner); root plan `docs/plans/0013` |
 
 ## Implemented Plans
 
