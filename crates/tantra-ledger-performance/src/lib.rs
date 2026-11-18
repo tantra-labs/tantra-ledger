@@ -53,8 +53,6 @@ pub mod metrics;
 // Phase 3 — daily P&L calendar aggregation + account comparison.
 pub mod calendar;
 pub mod compare;
-// Phase 4 — post-FIRE safe withdrawal rate & sequence-risk sustainability (T19.1 / plan 0006).
-pub mod swr;
 
 // Re-export the canonical kernel vocabulary so downstream consumers import one
 // place.
@@ -64,5 +62,3 @@ pub use tantra_core::{Currency, InstrumentId, Money, OrderSide, PositionSide, Pr
 pub use tantra_ledger_portfolio::{
     AccountState, HeldPosition, MatchedLot, PortfolioSnapshot, TaxLot,
 };
-
-pub use swr::{SwrError, SwrEvaluationInput, SwrReport, evaluate_swr};
