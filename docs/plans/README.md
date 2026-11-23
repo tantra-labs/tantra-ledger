@@ -18,7 +18,7 @@ every remaining roadmap item is now a numbered gap under
 
 | # | Title | Target Scope | Status |
 |---|-------|--------------|--------|
-| — | *(none)* | — | — |
+| [0006](0006-design-review-2026-11.md) | tantra-ledger design review (2026-11): OMS/journal correctness, idempotent fills & event-sourced persistence | `tantra-ledger-portfolio`, `-oms`, `-journal`, `tantra-ledger` facade | Proposed (2026-11-23) — gaps 0014–0022 |
 
 ## Implemented Plans
 

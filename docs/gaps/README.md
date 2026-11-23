@@ -14,7 +14,15 @@ the remaining future work is enumerated below.
 
 | # | Title | Severity | Status | Plan |
 |---|-------|----------|--------|------|
-| _(none)_ | — | — | — | — |
+| [0014](0014-corporate-action-scoping.md) | Corporate actions not scoped to an instrument; non-idempotent | critical | open | [0006](../plans/0006-design-review-2026-11.md) |
+| [0015](0015-apply-fill-ignores-side.md) | `apply_fill` ignores the fill side (same-direction fill booked as close) | high | open | [0006](../plans/0006-design-review-2026-11.md) |
+| [0016](0016-oms-typestate-transitions.md) | OMS lifecycle runtime-checked only; mutators bypass `transition()` | high | open | [0006](../plans/0006-design-review-2026-11.md) |
+| [0017](0017-fill-dedup-exec-id.md) | No exec-id dedupe: replayed fills double-counted | high | open | [0006](../plans/0006-design-review-2026-11.md) |
+| [0018](0018-journal-invariants-and-chart-of-accounts.md) | Journal: public mutable state, no tx-id idempotency, no account kinds | high | open | [0006](../plans/0006-design-review-2026-11.md) |
+| [0019](0019-event-log-and-snapshots.md) | No event log / snapshots; aggregates not serializable | high | open | [0006](../plans/0006-design-review-2026-11.md) |
+| [0020](0020-tax-lot-classification-and-dates.md) | Lot book lacks product classification; UTC dates, hard-coded holding period | medium | open | [0006](../plans/0006-design-review-2026-11.md) |
+| [0021](0021-corporate-action-rounding.md) | Fractional-share handling in split/bonus/demerger unspecified | medium | open | [0006](../plans/0006-design-review-2026-11.md) |
+| [0022](0022-bounded-state-and-snapshots.md) | Unbounded per-process maps; no eviction or rollover | medium | open | [0006](../plans/0006-design-review-2026-11.md) |
 
 ## Closed Gaps
 
