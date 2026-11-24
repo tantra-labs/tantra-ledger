@@ -6,8 +6,8 @@
 
 ## What's stubbed or hardcoded
 
-- `crates/tantra-ledger-oms/src/lib.rs:455-490` — `process_fill(client_order_id, fill_quantity, now)` takes only quantity: no exec/trade id, no price, no `FillReport`, so there is nothing to dedupe on. A duplicated partial fill advances `filled_quantity` again (only an overshoot is rejected, via `FillExceedsTarget`).
-- `crates/tantra-ledger-oms/src/lib.rs:253-262` — the entry tracks no `avg_fill_price`, no per-fill list, no commission; `snapshot()` (`crates/tantra-ledger-oms/src/lib.rs:~390`) hardcodes `total_commission/fees/today_pnl = 0` and `open_brackets: Vec::new()` ("until a real charge/PnL feed exists").
+- `crates/tantra-ledger-oms/src/lib.rs:583` — `process_fill(client_order_id, fill_quantity, now)` takes only quantity: no exec/trade id, no price, no `FillReport`, so there is nothing to dedupe on. A duplicated partial fill advances `filled_quantity` again (only an overshoot is rejected, via `FillExceedsTarget`).
+- `crates/tantra-ledger-oms/src/lib.rs:253-262` — the entry tracks no `avg_fill_price`, no per-fill list, no commission; `snapshot()` (`crates/tantra-ledger-oms/src/lib.rs:517`) hardcodes `total_commission/fees/today_pnl = 0` and `open_brackets: Vec::new()` ("until a real charge/PnL feed exists").
 - Out-of-order reports (fill before ack) are tolerated only via `(PendingNew, PartiallyFilled)`, but the code never sets `New`.
 - `crates/tantra-ledger/src/repository.rs:81` — `OrderRecord` separately carries `filled_quantity/avg_fill_price`: a second, richer order model that the OMS never feeds.
 
