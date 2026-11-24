@@ -92,7 +92,7 @@ pub fn evaluate_risk_budget(portfolio: &Portfolio, risk_pct: Decimal) -> RiskBud
     for account in portfolio.state.accounts.values() {
         total_cash += account.cash.amount;
         for pos in &account.positions {
-            let leg_notional = pos.entry_price.0 * pos.quantity.0;
+            let leg_notional = pos.entry_price.value() * pos.quantity.value();
             total_open_notional += leg_notional;
             total_gross_exposure += leg_notional.abs();
         }

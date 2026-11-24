@@ -311,9 +311,10 @@ impl OrderEntry {
     /// Quantity still pending execution.
     #[must_use]
     pub fn remaining_quantity(&self) -> Quantity {
-        Quantity::new(
+        Quantity::try_new(
             (self.target_quantity.value() - self.filled_quantity.value()).max(Decimal::ZERO),
         )
+        .expect("non-negative quantity")
     }
 
     /// True once the cumulative fill reaches the target quantity.
@@ -605,11 +606,11 @@ impl OrderStateMachine {
             return Err(OrderError::FillExceedsTarget {
                 order_id: client_order_id.clone(),
                 target: entry.target_quantity,
-                filled: Quantity::new(projected),
+                filled: Quantity::try_new(projected).expect("non-negative quantity"),
             });
         }
 
-        entry.filled_quantity = Quantity::new(projected);
+        entry.filled_quantity = Quantity::try_new(projected).expect("non-negative quantity");
         entry.updated_at = now;
         let state = if projected >= target {
             OrderStatus::Filled

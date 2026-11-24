@@ -31,7 +31,7 @@ use tantra_ledger_portfolio::{
 };
 
 fn reliance() -> InstrumentId {
-    InstrumentId::new(Exchange::Nse, "RELIANCE")
+    InstrumentId::try_new(Exchange::Nse, "RELIANCE").unwrap()
 }
 
 fn rupees(s: &str) -> Price {

@@ -31,7 +31,7 @@ fn fixed_uuid(n: u128) -> Uuid {
 }
 
 fn reliance() -> InstrumentId {
-    InstrumentId::new(Exchange::Nse, "RELIANCE")
+    InstrumentId::try_new(Exchange::Nse, "RELIANCE").unwrap()
 }
 
 fn sample_request(uuid: Uuid, qty: u64) -> OrderRequest {
@@ -78,10 +78,7 @@ fn test_validate_order_request_rejects_zero_quantity() {
 fn test_validate_order_request_rejects_oversized_quantity() {
     let request = sample_request(fixed_uuid(4), MAX_QUANTITY_PER_ORDER + 1);
     let result = submit_order(&request, fixed_time());
-    assert!(matches!(
-        result,
-        Err(OrderError::QuantityExceedsLimit(Quantity(_)))
-    ));
+    assert!(matches!(result, Err(OrderError::QuantityExceedsLimit(_))));
 }
 
 #[test]
@@ -216,9 +213,9 @@ fn test_price_from_rupees() {
 
 #[test]
 fn test_instrument_id() {
-    let id = InstrumentId::new(Exchange::Nse, "RELIANCE");
-    assert_eq!(id.exchange, Exchange::Nse);
-    assert_eq!(id.symbol, "RELIANCE");
+    let id = InstrumentId::try_new(Exchange::Nse, "RELIANCE").unwrap();
+    assert_eq!(id.exchange(), Exchange::Nse);
+    assert_eq!(id.symbol(), "RELIANCE");
 }
 
 #[test]

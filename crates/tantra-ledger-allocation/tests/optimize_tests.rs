@@ -15,7 +15,7 @@ fn d(s: &str) -> Decimal {
 }
 
 fn instrument(symbol: &str) -> InstrumentId {
-    InstrumentId::new(Exchange::Nse, symbol)
+    InstrumentId::try_new(Exchange::Nse, symbol).unwrap()
 }
 
 fn now() -> DateTime<Utc> {
@@ -74,7 +74,7 @@ fn weights(target: &TargetWeights) -> BTreeMap<String, Decimal> {
     target
         .weights
         .iter()
-        .map(|(id, w)| (id.symbol.clone(), *w))
+        .map(|(id, w)| (id.symbol().to_string(), *w))
         .collect()
 }
 

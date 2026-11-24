@@ -20,7 +20,7 @@ fn ts() -> chrono::DateTime<Utc> {
 }
 
 fn instrument() -> InstrumentId {
-    InstrumentId::new(Exchange::Nse, "RELIANCE")
+    InstrumentId::try_new(Exchange::Nse, "RELIANCE").unwrap()
 }
 
 /// Long plan with an ATR trail (3×ATR, activation 1R) and an AtR(1) breakeven
@@ -40,7 +40,7 @@ fn plan_long_trailing(
         "prop_trail",
         1,
         EntryRule::Market,
-        StopRule::Fixed(Price::new(stop)),
+        StopRule::Fixed(Price::try_new(stop).unwrap()),
         TrailSpec {
             rule: TrailRule::Atr {
                 mult: Decimal::from(3),
@@ -67,8 +67,8 @@ fn plan_long_trailing(
         subject: PlanSubject::Direct,
         instrument: instrument(),
         side: OrderSide::Buy,
-        last_price: Price::new(entry),
-        tick_size: Price::new(tick),
+        last_price: Price::try_new(entry).unwrap(),
+        tick_size: Price::try_new(tick).unwrap(),
         atr: Some(entry / Decimal::from(100)),
         adr_pct: None,
         swing_low: None,
@@ -112,15 +112,15 @@ proptest! {
             let low = (price - Decimal::from(10)).max(Decimal::ONE);
             let bar = Bar {
                 instrument: instrument(),
-                open: Price::new(price),
-                high: Price::new(high),
-                low: Price::new(low),
-                close: Price::new(price),
+                open: Price::try_new(price).unwrap(),
+                high: Price::try_new(high).unwrap(),
+                low: Price::try_new(low).unwrap(),
+                close: Price::try_new(price).unwrap(),
                 volume: Quantity::from_u64(0),
                 timestamp: ts(),
             };
             let snapshot = TradeSnapshot {
-                last_price: Price::new(price),
+                last_price: Price::try_new(price).unwrap(),
                 atr: Some(entry_d / Decimal::from(100)),
                 ma_values: vec![],
                 high: None,

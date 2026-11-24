@@ -39,7 +39,7 @@ fn fixed_uuid(n: u128) -> Uuid {
 }
 
 fn reliance() -> InstrumentId {
-    InstrumentId::new(Exchange::Nse, "RELIANCE")
+    InstrumentId::try_new(Exchange::Nse, "RELIANCE").unwrap()
 }
 
 fn entry_request(uuid: Uuid, side: OrderSide, limit: &str, qty: u64) -> OrderRequest {

@@ -30,11 +30,11 @@ fn fixed_uuid(n: u128) -> Uuid {
 }
 
 fn reliance() -> InstrumentId {
-    InstrumentId::new(Exchange::Nse, "RELIANCE")
+    InstrumentId::try_new(Exchange::Nse, "RELIANCE").unwrap()
 }
 
 fn other_scrip() -> InstrumentId {
-    InstrumentId::new(Exchange::Nse, "TCS")
+    InstrumentId::try_new(Exchange::Nse, "TCS").unwrap()
 }
 
 fn sample_request(uuid: Uuid, qty: u64) -> OrderRequest {
@@ -122,7 +122,7 @@ fn test_configured_max_quantity_is_enforced() {
     let cfg = config(None, Some(50), None); // config ceiling tighter than the hard 1,000,000
     let md = market("2000", "1990", "1995");
     let err = validate_order_against_context(&req, &cfg, Some(&md), None).expect_err("rejected");
-    assert!(matches!(err, OrderError::QuantityExceedsLimit(Quantity(_))));
+    assert!(matches!(err, OrderError::QuantityExceedsLimit(_)));
 }
 
 // ————————————————————————————————————————

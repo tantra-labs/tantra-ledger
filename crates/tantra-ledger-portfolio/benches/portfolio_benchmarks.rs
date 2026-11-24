@@ -25,11 +25,11 @@ fn fifo_taxlot_fill_match(bencher: Bencher) {
     let account = AccountState::new(Currency::Inr, vec![]);
     portfolio.accounts.insert("bench".to_string(), account);
 
-    let id = InstrumentId::new(Exchange::Nse, "RELIANCE");
+    let id = InstrumentId::try_new(Exchange::Nse, "RELIANCE").unwrap();
     let pos = HeldPosition::new(
         id.clone(),
         PositionSide::Long,
-        Quantity::new(Decimal::from(100)),
+        Quantity::try_new(Decimal::from(100)).unwrap(),
         Price::from_rupees("2000").unwrap(),
     );
     portfolio
@@ -55,11 +55,11 @@ fn fifo_taxlot_fill_match(bencher: Bencher) {
 /// Target: ~50-100 ns per computation
 #[divan::bench]
 fn capital_gains_computation(bencher: Bencher) {
-    let id = InstrumentId::new(Exchange::Nse, "RELIANCE");
+    let id = InstrumentId::try_new(Exchange::Nse, "RELIANCE").unwrap();
     let pos = HeldPosition::new(
         id,
         PositionSide::Long,
-        Quantity::new(Decimal::from(100)),
+        Quantity::try_new(Decimal::from(100)).unwrap(),
         Price::from_rupees("1500").unwrap(),
     );
 
@@ -81,11 +81,11 @@ fn portfolio_mtm_valuation_10_positions(bencher: Bencher) {
 
     let mut account = AccountState::new(Currency::Inr, vec![]);
     for i in 0..10 {
-        let id = InstrumentId::new(Exchange::Nse, format!("STOCK{}", i));
+        let id = InstrumentId::try_new(Exchange::Nse, format!("STOCK{}", i)).unwrap();
         let pos = HeldPosition::new(
             id.clone(),
             PositionSide::Long,
-            Quantity::new(Decimal::from(100)),
+            Quantity::try_new(Decimal::from(100)).unwrap(),
             Price::from_rupees("2000").unwrap(),
         );
         account.positions.push(pos);
@@ -100,8 +100,8 @@ fn portfolio_mtm_valuation_10_positions(bencher: Bencher) {
         if let Some(account) = portfolio.accounts.get("bench") {
             for pos in &account.positions {
                 if let Some(mark) = marks.marks.get(&pos.instrument) {
-                    let market_value = mark.0 * pos.quantity.0;
-                    let cost_basis = pos.entry_price.0 * pos.quantity.0;
+                    let market_value = mark.value() * pos.quantity.value();
+                    let cost_basis = pos.entry_price.value() * pos.quantity.value();
                     let unrealized = market_value - cost_basis;
 
                     total_market_value += market_value;
@@ -123,11 +123,11 @@ fn portfolio_mtm_valuation_100_positions(bencher: Bencher) {
 
     let mut account = AccountState::new(Currency::Inr, vec![]);
     for i in 0..100 {
-        let id = InstrumentId::new(Exchange::Nse, format!("STOCK{}", i));
+        let id = InstrumentId::try_new(Exchange::Nse, format!("STOCK{}", i)).unwrap();
         let pos = HeldPosition::new(
             id.clone(),
             PositionSide::Long,
-            Quantity::new(Decimal::from(100)),
+            Quantity::try_new(Decimal::from(100)).unwrap(),
             Price::from_rupees("2000").unwrap(),
         );
         account.positions.push(pos);
@@ -142,8 +142,8 @@ fn portfolio_mtm_valuation_100_positions(bencher: Bencher) {
         if let Some(account) = portfolio.accounts.get("bench") {
             for pos in &account.positions {
                 if let Some(mark) = marks.marks.get(&pos.instrument) {
-                    let market_value = mark.0 * pos.quantity.0;
-                    let cost_basis = pos.entry_price.0 * pos.quantity.0;
+                    let market_value = mark.value() * pos.quantity.value();
+                    let cost_basis = pos.entry_price.value() * pos.quantity.value();
                     let unrealized = market_value - cost_basis;
 
                     total_market_value += market_value;
@@ -163,11 +163,11 @@ fn tax_summary_generation(bencher: Bencher) {
     let mut portfolio = PortfolioState::new(Currency::Inr);
     let mut account = AccountState::new(Currency::Inr, vec![]);
 
-    let id = InstrumentId::new(Exchange::Nse, "RELIANCE");
+    let id = InstrumentId::try_new(Exchange::Nse, "RELIANCE").unwrap();
     let pos = HeldPosition::new(
         id.clone(),
         PositionSide::Long,
-        Quantity::new(Decimal::from(100)),
+        Quantity::try_new(Decimal::from(100)).unwrap(),
         Price::from_rupees("1500").unwrap(),
     );
     account.positions.push(pos);
@@ -197,9 +197,9 @@ fn tax_summary_generation(bencher: Bencher) {
 #[divan::bench]
 fn corporate_action_application(bencher: Bencher) {
     let pos = HeldPosition::new(
-        InstrumentId::new(Exchange::Nse, "RELIANCE"),
+        InstrumentId::try_new(Exchange::Nse, "RELIANCE").unwrap(),
         PositionSide::Long,
-        Quantity::new(Decimal::from(100)),
+        Quantity::try_new(Decimal::from(100)).unwrap(),
         Price::from_rupees("2000").unwrap(),
     );
 

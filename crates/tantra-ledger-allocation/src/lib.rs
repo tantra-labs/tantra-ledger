@@ -493,7 +493,8 @@ pub fn allocate_discrete(
         let fractional = raw_lots - whole;
         quantities.insert(
             slot.instrument.clone(),
-            Quantity::new(slot.lot_size * whole),
+            Quantity::try_new((slot.lot_size * whole).max(Decimal::ZERO))
+                .expect("non-negative quantity"),
         );
         total_spent += slot.lot_value * whole;
         remainders.push((fractional, i));
@@ -513,7 +514,8 @@ pub fn allocate_discrete(
             let qty = quantities
                 .get_mut(&slot.instrument)
                 .expect("quantity slot exists");
-            *qty = Quantity::new(qty.value() + slot.lot_size);
+            *qty = Quantity::try_new((qty.value() + slot.lot_size).max(Decimal::ZERO))
+                .expect("non-negative quantity");
             residual -= slot.lot_value;
             spent_any = true;
         }

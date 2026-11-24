@@ -217,8 +217,10 @@ impl DematHoldings {
             .get(&instrument)
             .copied()
             .unwrap_or(Quantity::ZERO);
-        self.free
-            .insert(instrument, Quantity::new(current.value() + qty.value()));
+        self.free.insert(
+            instrument,
+            Quantity::try_new(current.value() + qty.value()).expect("non-negative quantity"),
+        );
     }
 
     /// Remove free holdings (e.g., for sell order).
@@ -229,7 +231,7 @@ impl DematHoldings {
         }
         self.free.insert(
             instrument.clone(),
-            Quantity::new(current.value() - qty.value()),
+            Quantity::try_new(current.value() - qty.value()).expect("non-negative quantity"),
         );
         Ok(())
     }
@@ -249,7 +251,7 @@ impl DematHoldings {
             .unwrap_or(Quantity::ZERO);
         self.blocked.insert(
             instrument.clone(),
-            Quantity::new(current.value() + qty.value()),
+            Quantity::try_new(current.value() + qty.value()).expect("non-negative quantity"),
         );
         self.unsettled_receivables.push(UnsettledPosition {
             instrument,
@@ -276,7 +278,7 @@ impl DematHoldings {
         }
         self.blocked.insert(
             instrument.clone(),
-            Quantity::new(blocked.value() - qty.value()),
+            Quantity::try_new(blocked.value() - qty.value()).expect("non-negative quantity"),
         );
         self.add_free(instrument.clone(), qty);
 
@@ -294,7 +296,7 @@ impl DematHoldings {
             .get(instrument)
             .copied()
             .unwrap_or(Quantity::ZERO);
-        Quantity::new(free.value() + blocked.value())
+        Quantity::try_new(free.value() + blocked.value()).expect("non-negative quantity")
     }
 
     /// Get free (tradable) holdings for an instrument.
@@ -612,11 +614,11 @@ pub fn adjust_for_split(pos: &mut HeldPosition, ratio_numerator: u64, ratio_deno
     let ratio = Decimal::from(ratio_numerator) / Decimal::from(ratio_denominator);
 
     // Adjust quantity
-    pos.quantity = Quantity::new(pos.quantity.value() * ratio);
+    pos.quantity = Quantity::try_new(pos.quantity.value() * ratio).expect("non-negative quantity");
 
     // Adjust entry price (inverse of quantity ratio)
     let new_entry_price = pos.entry_price.value() / ratio;
-    pos.entry_price = Price::new(new_entry_price);
+    pos.entry_price = Price::try_new(new_entry_price).expect("non-negative price");
 
     // FIFO lot IDs remain the same (they track the same lots, just adjusted)
     // Note: In a full implementation with individual lot tracking, each lot would be adjusted
@@ -633,14 +635,15 @@ pub fn adjust_for_bonus(pos: &mut HeldPosition, ratio_numerator: u64, ratio_deno
     let ratio = Decimal::from(ratio_numerator) / Decimal::from(ratio_denominator);
 
     // Adjust quantity (increase by bonus ratio)
-    pos.quantity = Quantity::new(pos.quantity.value() * (Decimal::ONE + ratio));
+    pos.quantity = Quantity::try_new(pos.quantity.value() * (Decimal::ONE + ratio))
+        .expect("non-negative quantity");
 
     // Adjust entry price to keep total cost basis constant
     // New cost basis per share = old_total_cost / new_total_qty
     // = (old_price * old_qty) / (old_qty * (1 + ratio))
     // = old_price / (1 + ratio)
     let new_entry_price = pos.entry_price.value() / (Decimal::ONE + ratio);
-    pos.entry_price = Price::new(new_entry_price);
+    pos.entry_price = Price::try_new(new_entry_price).expect("non-negative price");
 
     // FIFO lot IDs remain the same
 }
@@ -684,8 +687,8 @@ pub fn adjust_for_demerger(
     Some(HeldPosition {
         instrument: new_instrument,
         side: pos.side,
-        quantity: Quantity::new(new_qty),
-        entry_price: Price::new(new_entry_price),
+        quantity: Quantity::try_new(new_qty).expect("non-negative quantity"),
+        entry_price: Price::try_new(new_entry_price).expect("non-negative price"),
         entry_lot_ids: pos
             .entry_lot_ids
             .iter()
@@ -709,9 +712,10 @@ pub fn adjust_lot_for_split(lot: &mut TaxLot, ratio_numerator: u64, ratio_denomi
         return; // Invalid ratio, no adjustment
     }
     let ratio = Decimal::from(ratio_numerator) / Decimal::from(ratio_denominator);
-    lot.quantity = Quantity::new(lot.quantity.value() * ratio);
-    lot.remaining_quantity = Quantity::new(lot.remaining_quantity.value() * ratio);
-    lot.entry_price = Price::new(lot.entry_price.value() / ratio);
+    lot.quantity = Quantity::try_new(lot.quantity.value() * ratio).expect("non-negative quantity");
+    lot.remaining_quantity =
+        Quantity::try_new(lot.remaining_quantity.value() * ratio).expect("non-negative quantity");
+    lot.entry_price = Price::try_new(lot.entry_price.value() / ratio).expect("non-negative price");
 }
 
 /// Adjust a single FIFO [`TaxLot`] for a bonus issue.
@@ -726,9 +730,12 @@ pub fn adjust_lot_for_bonus(lot: &mut TaxLot, ratio_numerator: u64, ratio_denomi
     }
     let ratio = Decimal::from(ratio_numerator) / Decimal::from(ratio_denominator);
     let multiplier = Decimal::ONE + ratio;
-    lot.quantity = Quantity::new(lot.quantity.value() * multiplier);
-    lot.remaining_quantity = Quantity::new(lot.remaining_quantity.value() * multiplier);
-    lot.entry_price = Price::new(lot.entry_price.value() / multiplier);
+    lot.quantity =
+        Quantity::try_new(lot.quantity.value() * multiplier).expect("non-negative quantity");
+    lot.remaining_quantity = Quantity::try_new(lot.remaining_quantity.value() * multiplier)
+        .expect("non-negative quantity");
+    lot.entry_price =
+        Price::try_new(lot.entry_price.value() / multiplier).expect("non-negative price");
 }
 
 /// Allocate a new demerged [`TaxLot`] out of an existing lot.
@@ -760,11 +767,14 @@ pub fn adjust_lot_for_demerger(
         account_id: lot.account_id.clone(),
         instrument: new_instrument,
         side: lot.side,
-        entry_price: Price::new(
-            lot.entry_price.value() * cost_basis_allocation_pct / allocation_ratio,
-        ),
-        quantity: Quantity::new(new_quantity),
-        remaining_quantity: Quantity::new(lot.remaining_quantity.value() * allocation_ratio),
+        entry_price: Price::try_new(
+            (lot.entry_price.value() * cost_basis_allocation_pct / allocation_ratio)
+                .max(Decimal::ZERO),
+        )
+        .expect("non-negative price"),
+        quantity: Quantity::try_new(new_quantity).expect("non-negative quantity"),
+        remaining_quantity: Quantity::try_new(lot.remaining_quantity.value() * allocation_ratio)
+            .expect("non-negative quantity"),
         entry_date: lot.entry_date,
         created_at: lot.created_at,
     })
@@ -776,7 +786,8 @@ pub fn adjust_lot_for_demerger(
 /// of the aggregate `adjust_for_demerger`'s basis reduction.
 pub fn reduce_lot_for_demerger(lot: &mut TaxLot, cost_basis_allocation_pct: Decimal) {
     let remaining_basis = lot.entry_price.value() * (Decimal::ONE - cost_basis_allocation_pct);
-    lot.entry_price = Price::new(remaining_basis);
+    lot.entry_price =
+        Price::try_new(remaining_basis.max(Decimal::ZERO)).expect("non-negative price");
 }
 
 /// Apply a corporate action to a position.
@@ -828,7 +839,8 @@ pub fn apply_corporate_action(
                 pos.entry_price.value() * (Decimal::ONE - *cost_basis_allocation_pct);
             // Adjust original entry price for the reduced cost basis
             // This is approximate; full implementation would track per-lot
-            pos.entry_price = Price::new(remaining_cost_basis);
+            pos.entry_price = Price::try_new(remaining_cost_basis.max(Decimal::ZERO))
+                .expect("non-negative price");
             (Money::inr(Decimal::ZERO), new_pos)
         }
     }
@@ -921,7 +933,8 @@ impl AccountState {
             .find(|p| p.instrument == instrument)
         {
             Some(pos) => {
-                pos.quantity = Quantity::new(pos.quantity.value() + lot.quantity.value());
+                pos.quantity = Quantity::try_new(pos.quantity.value() + lot.quantity.value())
+                    .expect("non-negative quantity");
                 pos.updated_at = lot.created_at;
             }
             None => {
@@ -1035,7 +1048,7 @@ impl AccountState {
             .unwrap_or(DateTime::<Utc>::UNIX_EPOCH);
         for (instrument, (side, total_qty, weighted_basis)) in grouped {
             let entry_price = if total_qty > Decimal::ZERO {
-                Price::new(weighted_basis / total_qty)
+                Price::try_new(weighted_basis / total_qty).expect("non-negative price")
             } else {
                 Price::ZERO
             };
@@ -1044,14 +1057,14 @@ impl AccountState {
                 .iter_mut()
                 .find(|p| p.instrument == instrument)
             {
-                pos.quantity = Quantity::new(total_qty);
+                pos.quantity = Quantity::try_new(total_qty).expect("non-negative quantity");
                 pos.entry_price = entry_price;
             } else {
                 self.positions.push(
                     HeldPosition::new(
                         instrument,
                         side.unwrap_or(PositionSide::Long),
-                        Quantity::new(total_qty),
+                        Quantity::try_new(total_qty).expect("non-negative quantity"),
                         entry_price,
                     )
                     .with_updated_at(latest_stamp),
@@ -1106,7 +1119,7 @@ impl AccountState {
 
             matched_lots.push(MatchedLot {
                 lot_id: lot.lot_id.clone(),
-                matched_quantity: Quantity::new(match_qty_dec),
+                matched_quantity: Quantity::try_new(match_qty_dec).expect("non-negative quantity"),
                 entry_price: lot.entry_price,
                 exit_price: fill.price,
                 realized_pnl,
@@ -1114,7 +1127,8 @@ impl AccountState {
                 is_long_term,
             });
 
-            lot.remaining_quantity = Quantity::new(lot_avail - match_qty_dec);
+            lot.remaining_quantity =
+                Quantity::try_new(lot_avail - match_qty_dec).expect("non-negative quantity");
             remaining_fill -= match_qty_dec;
 
             if remaining_fill <= Decimal::ZERO {
@@ -1135,7 +1149,8 @@ impl AccountState {
                 .find(|p| p.instrument == fill.instrument)
             {
                 pos.quantity =
-                    Quantity::new((pos.quantity.value() - total_matched).max(Decimal::ZERO));
+                    Quantity::try_new((pos.quantity.value() - total_matched).max(Decimal::ZERO))
+                        .expect("non-negative quantity");
                 pos.realized_pnl = Money::inr(pos.realized_pnl.amount + total_realized);
                 pos.updated_at = fill.timestamp;
             }
@@ -1207,7 +1222,7 @@ pub fn value(state: &PortfolioState, marks: &Marks) -> PortfolioSnapshot {
             total_realized = Money::inr(total_realized.amount + pos.realized_pnl.amount);
 
             *breakdown
-                .entry(pos.instrument.symbol.to_string())
+                .entry(pos.instrument.symbol().to_string())
                 .or_insert(Money::inr(Decimal::ZERO)) = market_value;
         }
     }
@@ -1237,7 +1252,8 @@ pub fn apply_fill(
             if fill_qty_dec <= pos.quantity.value() {
                 // Partial fill: reduce quantity, compute PnL on the filled portion
                 let pnl = (fill_price_dec - entry_price_dec) * fill_qty_dec;
-                pos.quantity = Quantity::new(pos.quantity.value() - fill_qty_dec);
+                pos.quantity = Quantity::try_new(pos.quantity.value() - fill_qty_dec)
+                    .expect("non-negative quantity");
                 Money::inr(pnl)
             } else {
                 // Full close + reverse: the existing long is closed entirely
@@ -1249,7 +1265,7 @@ pub fn apply_fill(
                 let pnl_on_close = (fill_price_dec - entry_price_dec) * closed_qty;
                 let reverse_qty = fill_qty_dec - closed_qty;
                 pos.side = PositionSide::Short;
-                pos.quantity = Quantity::new(reverse_qty);
+                pos.quantity = Quantity::try_new(reverse_qty).expect("non-negative quantity");
                 pos.entry_price = fill_price;
                 pos.entry_lot_ids.clear();
                 Money::inr(pnl_on_close)
@@ -1260,7 +1276,8 @@ pub fn apply_fill(
                 // Short realized PnL is symmetric to Long: profit when the
                 // buy-back (fill_price) is BELOW the entry (short-sale) price.
                 let pnl = (entry_price_dec - fill_price_dec) * fill_qty_dec;
-                pos.quantity = Quantity::new(pos.quantity.value() - fill_qty_dec);
+                pos.quantity = Quantity::try_new(pos.quantity.value() - fill_qty_dec)
+                    .expect("non-negative quantity");
                 Money::inr(pnl)
             } else {
                 // Full close + reverse: symmetric to the Long case above.
@@ -1268,7 +1285,7 @@ pub fn apply_fill(
                 let pnl_on_close = (entry_price_dec - fill_price_dec) * closed_qty;
                 let reverse_qty = fill_qty_dec - closed_qty;
                 pos.side = PositionSide::Long;
-                pos.quantity = Quantity::new(reverse_qty);
+                pos.quantity = Quantity::try_new(reverse_qty).expect("non-negative quantity");
                 pos.entry_price = fill_price;
                 pos.entry_lot_ids.clear();
                 Money::inr(pnl_on_close)
@@ -1302,7 +1319,7 @@ pub fn apply_fill_to_account(
             let pos = HeldPosition::new(
                 instrument_id,
                 side,
-                Quantity::new(Decimal::from(fill_qty)),
+                Quantity::from_u64(fill_qty),
                 fill_price,
             );
             account.positions.push(pos);
@@ -1374,12 +1391,7 @@ pub fn init_position(
     qty: u64,
     price: Price,
 ) -> HeldPosition {
-    HeldPosition::new(
-        instrument_id,
-        side,
-        Quantity::new(Decimal::from(qty)),
-        price,
-    )
+    HeldPosition::new(instrument_id, side, Quantity::from_u64(qty), price)
 }
 
 /// A trade execution record with trade and settlement dates.
@@ -1442,7 +1454,7 @@ pub fn settle_trades(
                     if trade.side == PositionSide::Long {
                         // Reduce long position (someone is selling to this account's buyer)
                         *position_changes
-                            .entry(trade.instrument.symbol.to_string())
+                            .entry(trade.instrument.symbol().to_string())
                             .or_insert(0) -= i64::try_from(trade.quantity).unwrap_or(i64::MAX);
 
                         // Adjust cash: add proceeds
@@ -1455,13 +1467,16 @@ pub fn settle_trades(
 
                         // Reduce position quantity
                         if let Some(p) = account.positions.get_mut(idx) {
-                            p.quantity =
-                                Quantity::new(p.quantity.value() - Decimal::from(trade.quantity));
+                            p.quantity = Quantity::try_new(
+                                (p.quantity.value() - Decimal::from(trade.quantity))
+                                    .max(Decimal::ZERO),
+                            )
+                            .expect("non-negative quantity");
                         }
                     } else if trade.side == PositionSide::Short {
                         // Cover short position
                         *position_changes
-                            .entry(trade.instrument.symbol.to_string())
+                            .entry(trade.instrument.symbol().to_string())
                             .or_insert(0) += i64::try_from(trade.quantity).unwrap_or(i64::MAX);
 
                         // Adjust cash: subtract buy-in cost
@@ -1473,8 +1488,11 @@ pub fn settle_trades(
 
                         // Remove or reduce short position
                         if let Some(p) = account.positions.get_mut(idx) {
-                            p.quantity =
-                                Quantity::new(p.quantity.value() - Decimal::from(trade.quantity));
+                            p.quantity = Quantity::try_new(
+                                (p.quantity.value() - Decimal::from(trade.quantity))
+                                    .max(Decimal::ZERO),
+                            )
+                            .expect("non-negative quantity");
                             if p.quantity.value() <= Decimal::ZERO {
                                 account.positions.remove(idx);
                             }
@@ -1505,7 +1523,7 @@ pub fn settle_trades(
                         account.positions.push(HeldPosition::new(
                             trade.instrument.clone(),
                             PositionSide::Long,
-                            Quantity::new(Decimal::from(trade.quantity)),
+                            Quantity::from_u64(trade.quantity),
                             trade.price,
                         ));
                     }

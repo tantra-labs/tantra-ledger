@@ -23,11 +23,11 @@ fn fixed_now() -> DateTime<Utc> {
 }
 
 fn reliance() -> InstrumentId {
-    InstrumentId::new(Exchange::Nse, "RELIANCE")
+    InstrumentId::try_new(Exchange::Nse, "RELIANCE").unwrap()
 }
 
 fn acme() -> InstrumentId {
-    InstrumentId::new(Exchange::Nse, "ACME")
+    InstrumentId::try_new(Exchange::Nse, "ACME").unwrap()
 }
 
 fn lot(id: &str, qty: u64, price: &str) -> TaxLot {
@@ -98,8 +98,11 @@ fn test_bonus_fractional_ratio() {
     let mut l = lot("L1", 200, "1200");
     // 1:4 bonus: 200 * (1 + 1/4) = 250, price 1200 / 1.25 = 960.
     adjust_lot_for_bonus(&mut l, 1, 4);
-    assert_eq!(l.quantity, Quantity::new(Decimal::from(250)));
-    assert_eq!(l.remaining_quantity, Quantity::new(Decimal::from(250)));
+    assert_eq!(l.quantity, Quantity::try_new(Decimal::from(250)).unwrap());
+    assert_eq!(
+        l.remaining_quantity,
+        Quantity::try_new(Decimal::from(250)).unwrap()
+    );
     assert_eq!(l.entry_price, Price::from_rupees("960").unwrap());
 }
 

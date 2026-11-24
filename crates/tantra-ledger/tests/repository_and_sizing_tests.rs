@@ -41,7 +41,7 @@ fn test_order_repository_lifecycle() {
     let algo_1 = AlgoId::new("MOMENTUM_ALPHA");
     let algo_2 = AlgoId::new("MEAN_REVERSION");
     let account = AccountId::new("PROP_DESK_1");
-    let instrument = InstrumentId::new(Exchange::Nse, "RELIANCE");
+    let instrument = InstrumentId::try_new(Exchange::Nse, "RELIANCE").unwrap();
 
     let now = fixed_fill_time();
     let order = OrderRecord {
@@ -96,7 +96,7 @@ fn test_order_repository_lifecycle() {
 fn test_position_repository_fifo_tax_lot_matching() {
     let mut repo = InMemoryPositionRepository::new();
     let account = AccountId::new("CLIENT_ACCOUNT_42");
-    let instrument = InstrumentId::new(Exchange::Nse, "TCS");
+    let instrument = InstrumentId::try_new(Exchange::Nse, "TCS").unwrap();
 
     // Fixed fill instant: 2026-02-20 09:15 UTC. Pinned so the holding-period
     // assertions below hold by arithmetic, not by the wall clock.
@@ -236,7 +236,7 @@ fn test_ledger_repository_posting_and_balance() {
 
 #[test]
 fn test_evaluate_risk_budget_and_sizing_integration() {
-    let instrument = InstrumentId::new(Exchange::Nse, "INFY");
+    let instrument = InstrumentId::try_new(Exchange::Nse, "INFY").unwrap();
     let mut state = PortfolioState::new(Currency::Inr);
 
     let mut acc = AccountState::new(Currency::Inr, vec![]);

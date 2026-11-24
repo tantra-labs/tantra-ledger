@@ -345,10 +345,14 @@ impl TradeManager {
         for target in &self.targets {
             let mut updated = target.clone();
             if target.kind == ActiveTargetKind::R {
-                updated.price = Price::new(match self.side {
-                    OrderSide::Buy => fill + target.r * new_risk,
-                    OrderSide::Sell => fill - target.r * new_risk,
-                });
+                updated.price = Price::try_new(
+                    match self.side {
+                        OrderSide::Buy => fill + target.r * new_risk,
+                        OrderSide::Sell => fill - target.r * new_risk,
+                    }
+                    .max(Decimal::ZERO),
+                )
+                .expect("non-negative price");
             }
             re_priced.push(updated);
         }
@@ -410,7 +414,8 @@ impl TradeManager {
                     if qty > Quantity::ZERO {
                         self.realized_pnl += self.pnl_for(bar.open, qty);
                         self.open_quantity =
-                            Quantity::new(self.open_quantity.value() - qty.value());
+                            Quantity::try_new(self.open_quantity.value() - qty.value())
+                                .expect("non-negative quantity");
                         self.events.push(TradeManagerEvent::PartialExit {
                             ts,
                             qty,
@@ -431,8 +436,8 @@ impl TradeManager {
         let bar_low = bar.low.value();
         let snap_high = snapshot.high.map_or(bar_high, |price| price.value());
         let snap_low = snapshot.low.map_or(bar_low, |price| price.value());
-        let high = Price::new(bar_high.max(snap_high));
-        let low = Price::new(bar_low.min(snap_low));
+        let high = Price::try_new(bar_high.max(snap_high)).expect("non-negative price");
+        let low = Price::try_new(bar_low.min(snap_low)).expect("non-negative price");
         self.extreme_high = Some(match self.extreme_high {
             Some(existing) => existing.max(high),
             None => high,
@@ -458,13 +463,14 @@ impl TradeManager {
                 Some(BreakevenTrigger::AfterFirstTarget) => self.first_target_filled,
                 None => false,
             };
-            if fires
-                && let Some(level) = self.breakeven_level
-                && let Some(action) = self.tighten_stop(level, ts)
-            {
-                actions.push(action);
+            if fires {
+                if let Some(level) = self.breakeven_level
+                    && let Some(action) = self.tighten_stop(level, ts)
+                {
+                    actions.push(action);
+                }
+                self.stop_at_breakeven = true;
             }
-            self.stop_at_breakeven = true;
         }
 
         // 5. Stop-first: when the stop is inside the bar, the stop wins.
@@ -494,7 +500,9 @@ impl TradeManager {
                 let qty = leg.qty.min(self.open_quantity);
                 if qty > Quantity::ZERO {
                     self.realized_pnl += self.pnl_for(leg.price, qty);
-                    self.open_quantity = Quantity::new(self.open_quantity.value() - qty.value());
+                    self.open_quantity =
+                        Quantity::try_new(self.open_quantity.value() - qty.value())
+                            .expect("non-negative quantity");
                     self.events.push(TradeManagerEvent::PartialExit {
                         ts,
                         qty,
@@ -573,13 +581,14 @@ impl TradeManager {
                 self.breakeven_trigger,
                 Some(BreakevenTrigger::AfterSessions(n)) if self.sessions_open >= n
             );
-            if fires
-                && let Some(level) = self.breakeven_level
-                && let Some(action) = self.tighten_stop(level, ts)
-            {
-                actions.push(action);
+            if fires {
+                if let Some(level) = self.breakeven_level
+                    && let Some(action) = self.tighten_stop(level, ts)
+                {
+                    actions.push(action);
+                }
+                self.stop_at_breakeven = true;
             }
-            self.stop_at_breakeven = true;
         }
 
         // AfterSessions target legs.
@@ -725,9 +734,13 @@ impl TradeManager {
                 };
                 Some(match self.side {
                     OrderSide::Buy => {
-                        Price::new((extreme.value() - *mult * atr).max(Decimal::ZERO))
+                        Price::try_new((extreme.value() - *mult * atr).max(Decimal::ZERO))
+                            .expect("non-negative price")
                     }
-                    OrderSide::Sell => Price::new(extreme.value() + *mult * atr),
+                    OrderSide::Sell => {
+                        Price::try_new((extreme.value() + *mult * atr).max(Decimal::ZERO))
+                            .expect("non-negative price")
+                    }
                 })
             }
             TrailRule::Swing => match self.side {
@@ -741,9 +754,13 @@ impl TradeManager {
                 };
                 Some(match self.side {
                     OrderSide::Buy => {
-                        Price::new((extreme.value() * (Decimal::ONE - *pct)).max(Decimal::ZERO))
+                        Price::try_new((extreme.value() * (Decimal::ONE - *pct)).max(Decimal::ZERO))
+                            .expect("non-negative price")
                     }
-                    OrderSide::Sell => Price::new(extreme.value() * (Decimal::ONE + *pct)),
+                    OrderSide::Sell => {
+                        Price::try_new((extreme.value() * (Decimal::ONE + *pct)).max(Decimal::ZERO))
+                            .expect("non-negative price")
+                    }
                 })
             }
         }

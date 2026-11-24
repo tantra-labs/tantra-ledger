@@ -11,7 +11,7 @@ use tantra_ledger_performance::model::{
 use tantra_ledger_portfolio::MatchedLot;
 
 pub fn instrument(symbol: &str) -> InstrumentId {
-    InstrumentId::new(Exchange::Nse, symbol)
+    InstrumentId::try_new(Exchange::Nse, symbol).unwrap()
 }
 
 pub fn price(s: &str) -> Price {

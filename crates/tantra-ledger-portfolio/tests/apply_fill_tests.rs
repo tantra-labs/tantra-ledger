@@ -18,7 +18,7 @@ use tantra_core::{Exchange, InstrumentId};
 use tantra_ledger_portfolio::{HeldPosition, PositionSide, Price, Quantity, apply_fill};
 
 fn reliance() -> InstrumentId {
-    InstrumentId::new(Exchange::Nse, "RELIANCE")
+    InstrumentId::try_new(Exchange::Nse, "RELIANCE").unwrap()
 }
 
 #[test]
@@ -28,7 +28,7 @@ fn test_short_position_realized_pnl_is_computed() {
     let mut pos = HeldPosition::new(
         reliance(),
         PositionSide::Short,
-        Quantity::new(Decimal::from(10)),
+        Quantity::try_new(Decimal::from(10)).unwrap(),
         Price::from_rupees("2000").unwrap(),
     );
 
@@ -40,7 +40,7 @@ fn test_short_position_realized_pnl_is_computed() {
     );
 
     assert_eq!(pnl.amount, Decimal::from(500));
-    assert_eq!(pos.quantity.0, Decimal::ZERO);
+    assert_eq!(pos.quantity.value(), Decimal::ZERO);
 }
 
 #[test]
@@ -49,7 +49,7 @@ fn test_short_position_partial_close_realized_pnl() {
     let mut pos = HeldPosition::new(
         reliance(),
         PositionSide::Short,
-        Quantity::new(Decimal::from(10)),
+        Quantity::try_new(Decimal::from(10)).unwrap(),
         Price::from_rupees("2000").unwrap(),
     );
 
@@ -63,7 +63,7 @@ fn test_short_position_partial_close_realized_pnl() {
     // 4 * (2000 - 1950) = 200
     assert_eq!(pnl.amount, Decimal::from(200));
     // Remaining short quantity: 6
-    assert_eq!(pos.quantity.0, Decimal::from(6));
+    assert_eq!(pos.quantity.value(), Decimal::from(6));
     assert_eq!(pos.side, PositionSide::Short);
 }
 
@@ -73,7 +73,7 @@ fn test_short_position_realized_pnl_is_negative_on_loss() {
     let mut pos = HeldPosition::new(
         reliance(),
         PositionSide::Short,
-        Quantity::new(Decimal::from(10)),
+        Quantity::try_new(Decimal::from(10)).unwrap(),
         Price::from_rupees("2000").unwrap(),
     );
 
@@ -96,7 +96,7 @@ fn test_long_position_partial_close_pnl() {
     let mut pos = HeldPosition::new(
         reliance(),
         PositionSide::Long,
-        Quantity::new(Decimal::from(10)),
+        Quantity::try_new(Decimal::from(10)).unwrap(),
         Price::from_rupees("2000").unwrap(),
     );
 
@@ -109,7 +109,7 @@ fn test_long_position_partial_close_pnl() {
 
     // 4 * (2015 - 2000) = 60
     assert_eq!(pnl.amount, Decimal::from(60));
-    assert_eq!(pos.quantity.0, Decimal::from(6));
+    assert_eq!(pos.quantity.value(), Decimal::from(6));
     assert_eq!(pos.side, PositionSide::Long);
 }
 
@@ -121,7 +121,7 @@ fn test_long_to_short_reversal_opens_new_short_leg() {
     let mut pos = HeldPosition::new(
         reliance(),
         PositionSide::Long,
-        Quantity::new(Decimal::from(10)),
+        Quantity::try_new(Decimal::from(10)).unwrap(),
         Price::from_rupees("2000").unwrap(),
     );
 
@@ -140,8 +140,8 @@ fn test_long_to_short_reversal_opens_new_short_leg() {
     // The position must have flipped to Short with the remaining 5 units,
     // entered at the fill price.
     assert_eq!(pos.side, PositionSide::Short);
-    assert_eq!(pos.quantity.0, Decimal::from(5));
-    assert_eq!(pos.entry_price.0, Decimal::from(2100));
+    assert_eq!(pos.quantity.value(), Decimal::from(5));
+    assert_eq!(pos.entry_price.value(), Decimal::from(2100));
 }
 
 #[test]
@@ -152,7 +152,7 @@ fn test_short_to_long_reversal_symmetric_case() {
     let mut pos = HeldPosition::new(
         reliance(),
         PositionSide::Short,
-        Quantity::new(Decimal::from(10)),
+        Quantity::try_new(Decimal::from(10)).unwrap(),
         Price::from_rupees("2000").unwrap(),
     );
 
@@ -167,8 +167,8 @@ fn test_short_to_long_reversal_symmetric_case() {
     assert_eq!(pnl.amount, Decimal::from(1000));
 
     assert_eq!(pos.side, PositionSide::Long);
-    assert_eq!(pos.quantity.0, Decimal::from(5));
-    assert_eq!(pos.entry_price.0, Decimal::from(1900));
+    assert_eq!(pos.quantity.value(), Decimal::from(5));
+    assert_eq!(pos.entry_price.value(), Decimal::from(1900));
 }
 
 #[test]
@@ -179,7 +179,7 @@ fn test_long_full_close_exact_quantity_still_zeroes_out() {
     let mut pos = HeldPosition::new(
         reliance(),
         PositionSide::Long,
-        Quantity::new(Decimal::from(10)),
+        Quantity::try_new(Decimal::from(10)).unwrap(),
         Price::from_rupees("2000").unwrap(),
     );
 
@@ -191,6 +191,6 @@ fn test_long_full_close_exact_quantity_still_zeroes_out() {
     );
 
     assert_eq!(pnl.amount, Decimal::from(500));
-    assert_eq!(pos.quantity.0, Decimal::ZERO);
+    assert_eq!(pos.quantity.value(), Decimal::ZERO);
     assert_eq!(pos.side, PositionSide::Long);
 }

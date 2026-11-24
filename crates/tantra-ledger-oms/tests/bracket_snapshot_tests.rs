@@ -26,7 +26,7 @@ fn fixed_uuid(n: u128) -> Uuid {
 }
 
 fn reliance() -> InstrumentId {
-    InstrumentId::new(Exchange::Nse, "RELIANCE")
+    InstrumentId::try_new(Exchange::Nse, "RELIANCE").unwrap()
 }
 
 fn fill(uuid: Uuid, price: &str, qty: u64, side: OrderSide, at: DateTime<Utc>) -> FillReport {

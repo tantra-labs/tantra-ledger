@@ -23,7 +23,7 @@ fn d(s: &str) -> Decimal {
 }
 
 fn instrument(symbol: &str) -> tantra_core::InstrumentId {
-    tantra_core::InstrumentId::new(Exchange::Nse, symbol)
+    tantra_core::InstrumentId::try_new(Exchange::Nse, symbol).unwrap()
 }
 
 fn now() -> DateTime<Utc> {

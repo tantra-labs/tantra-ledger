@@ -17,7 +17,7 @@ use tantra_ledger_portfolio::{
 };
 
 fn reliance() -> InstrumentId {
-    InstrumentId::new(Exchange::Nse, "RELIANCE")
+    InstrumentId::try_new(Exchange::Nse, "RELIANCE").unwrap()
 }
 
 /// Fixed stamp injected by the tests, standing in for the deleted
@@ -40,7 +40,7 @@ fn test_fill_reduces_long() {
     let pos = HeldPosition::new(
         id.clone(),
         PositionSide::Long,
-        Quantity::new(Decimal::from(10)),
+        Quantity::try_new(Decimal::from(10)).unwrap(),
         Price::from_rupees("2000").unwrap(),
     );
     acc.positions.push(pos);
@@ -57,7 +57,7 @@ fn test_fill_reduces_long() {
     assert!(pnl.amount > Decimal::from(0)); // 4 * (2015 - 2000) = 60 INR
     // Position should now have 6 units
     let pos = &state.accounts["acct1"].positions[0];
-    assert_eq!(pos.quantity.0, Decimal::from(6));
+    assert_eq!(pos.quantity.value(), Decimal::from(6));
 }
 
 #[test]
@@ -67,7 +67,7 @@ fn test_fill_full_close_long() {
     let pos = HeldPosition::new(
         id.clone(),
         PositionSide::Long,
-        Quantity::new(Decimal::from(10)),
+        Quantity::try_new(Decimal::from(10)).unwrap(),
         Price::from_rupees("2000").unwrap(),
     );
     acc.positions.push(pos);
@@ -84,7 +84,7 @@ fn test_fill_full_close_long() {
     assert!(pnl.amount > Decimal::from(0)); // 10 * (2050 - 2000) = 500 INR
     // Position should now have 0 units
     let pos = &state.accounts["acct1"].positions[0];
-    assert_eq!(pos.quantity.0, Decimal::from(0));
+    assert_eq!(pos.quantity.value(), Decimal::from(0));
     // entry_lot_ids should be cleared
     assert!(pos.entry_lot_ids.is_empty());
 }
@@ -95,7 +95,7 @@ fn test_entry_date_tracking() {
     let pos = HeldPosition::new(
         id,
         PositionSide::Long,
-        Quantity::new(Decimal::from(10)),
+        Quantity::try_new(Decimal::from(10)).unwrap(),
         Price::from_rupees("2000").unwrap(),
     );
     // There is no clock in the library: `HeldPosition::new` stamps the
@@ -138,7 +138,7 @@ fn test_compute_capital_gains_short_term() {
     let pos = HeldPosition::new(
         id,
         PositionSide::Long,
-        Quantity::new(Decimal::from(10)),
+        Quantity::try_new(Decimal::from(10)).unwrap(),
         Price::from_rupees("1500").unwrap(),
     )
     .with_entry_date(NaiveDate::from_ymd_opt(2026, 1, 1).unwrap());
@@ -159,7 +159,7 @@ fn test_tax_summary_from_fills() {
     let pos = HeldPosition::new(
         id.clone(),
         PositionSide::Long,
-        Quantity::new(Decimal::from(10)),
+        Quantity::try_new(Decimal::from(10)).unwrap(),
         Price::from_rupees("1500").unwrap(),
     );
     acc.positions.push(pos);
@@ -206,7 +206,7 @@ fn test_adjust_for_split() {
     let mut pos = HeldPosition::new(
         id,
         PositionSide::Long,
-        Quantity::new(Decimal::from(10)),
+        Quantity::try_new(Decimal::from(10)).unwrap(),
         Price::from_rupees("2000").unwrap(),
     );
 
@@ -214,9 +214,9 @@ fn test_adjust_for_split() {
     adjust_for_split(&mut pos, 2, 1);
 
     // Quantity should double
-    assert_eq!(pos.quantity.0, Decimal::from(20));
+    assert_eq!(pos.quantity.value(), Decimal::from(20));
     // Entry price should halve
-    assert_eq!(pos.entry_price.0, Decimal::from(1000));
+    assert_eq!(pos.entry_price.value(), Decimal::from(1000));
 }
 
 #[test]
@@ -225,7 +225,7 @@ fn test_adjust_for_bonus() {
     let mut pos = HeldPosition::new(
         id,
         PositionSide::Long,
-        Quantity::new(Decimal::from(10)),
+        Quantity::try_new(Decimal::from(10)).unwrap(),
         Price::from_rupees("2000").unwrap(),
     );
 
@@ -233,9 +233,9 @@ fn test_adjust_for_bonus() {
     adjust_for_bonus(&mut pos, 1, 1);
 
     // Quantity should double (10 + 10 bonus = 20)
-    assert_eq!(pos.quantity.0, Decimal::from(20));
+    assert_eq!(pos.quantity.value(), Decimal::from(20));
     // Entry price should halve to keep total cost basis same
-    assert_eq!(pos.entry_price.0, Decimal::from(1000));
+    assert_eq!(pos.entry_price.value(), Decimal::from(1000));
 }
 
 #[test]
@@ -244,7 +244,7 @@ fn test_record_dividend() {
     let pos = HeldPosition::new(
         id,
         PositionSide::Long,
-        Quantity::new(Decimal::from(100)),
+        Quantity::try_new(Decimal::from(100)).unwrap(),
         Price::from_rupees("2000").unwrap(),
     );
 
@@ -264,7 +264,7 @@ fn test_corporate_action_split_before_fill() {
     let pos = HeldPosition::new(
         id.clone(),
         PositionSide::Long,
-        Quantity::new(Decimal::from(10)),
+        Quantity::try_new(Decimal::from(10)).unwrap(),
         Price::from_rupees("2000").unwrap(),
     );
     acc.positions.push(pos);
@@ -317,7 +317,7 @@ fn test_corporate_action_bonus_before_fill() {
     let pos = HeldPosition::new(
         id.clone(),
         PositionSide::Long,
-        Quantity::new(Decimal::from(10)),
+        Quantity::try_new(Decimal::from(10)).unwrap(),
         Price::from_rupees("2000").unwrap(),
     );
     acc.positions.push(pos);
@@ -370,7 +370,7 @@ fn test_corporate_action_dividend() {
     let pos = HeldPosition::new(
         id.clone(),
         PositionSide::Long,
-        Quantity::new(Decimal::from(100)),
+        Quantity::try_new(Decimal::from(100)).unwrap(),
         Price::from_rupees("2000").unwrap(),
     );
     acc.positions.push(pos);
@@ -425,7 +425,7 @@ fn test_corporate_action_after_fill_not_applied() {
     let pos = HeldPosition::new(
         id.clone(),
         PositionSide::Long,
-        Quantity::new(Decimal::from(10)),
+        Quantity::try_new(Decimal::from(10)).unwrap(),
         Price::from_rupees("2000").unwrap(),
     );
     acc.positions.push(pos);

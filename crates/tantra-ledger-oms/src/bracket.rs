@@ -370,7 +370,7 @@ impl BracketOrder {
         if let Some(pos) = self.remaining_targets.iter().position(|t| t.qty == qty) {
             self.remaining_targets.remove(pos);
         }
-        self.open_qty = Quantity::new(after);
+        self.open_qty = Quantity::try_new(after).expect("non-negative quantity");
         self.events.push(BracketEvent::PartialExit {
             price,
             qty,

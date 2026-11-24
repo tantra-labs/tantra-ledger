@@ -27,7 +27,7 @@ fn fixed_time() -> DateTime<Utc> {
 }
 
 fn reliance() -> InstrumentId {
-    InstrumentId::new(Exchange::Nse, "RELIANCE")
+    InstrumentId::try_new(Exchange::Nse, "RELIANCE").unwrap()
 }
 
 /// Randomised operation fed to the aggregate. Operations may be invalid for
