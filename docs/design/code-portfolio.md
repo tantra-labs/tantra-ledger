@@ -6,8 +6,9 @@ Indian T+1 Demat settlement, corporate actions, and portfolio valuation.
 ## `AccountState`
 
 The portfolio aggregate root per trading account. Owns the canonical FIFO
-tax-lot matching logic (`match_lots`) and the lot book (`record_lot`) — the
-repository layer only adapts canonical `FillReport`s into the matching input.
+tax-lot matching logic (`match_lots`), the lot book (`record_lot`), and
+idempotent corporate-action tracking (`applied_corporate_actions: BTreeSet<ActionId>`) —
+the repository layer only adapts canonical `FillReport`s into the matching input.
 
 ### `AccountState::match_lots` (FIFO matching)
 
@@ -37,7 +38,7 @@ When a closing fill arrives, `AccountState::match_lots(&LotFill)`:
 | `DematHoldings` | Free vs blocked holdings, unsettled receivables/payables, `block_for_settlement`, `settle_receivable`. |
 | `SettlementEngine` | Builds `SettlementInstruction`s from fills (`create_instruction`) and processes due settlements (`process_settlements`). |
 | `Fill` / `SettlementInstruction` | Fill event and settlement instruction records (broker/execution layer shapes). |
-| `CorporateAction` | `Split`, `Bonus`, `Dividend`, `Demerger` with ex-date; aggregate helpers (`apply_corporate_action` → `adjust_for_split`, `adjust_for_bonus`, `record_dividend`, `adjust_for_demerger`) remain as projections, while `AccountState::apply_corporate_actions_to_lots` adjusts every `TaxLot` per-lot (split/bonus/demerger scale quantity + entry price, dividend accrues from remaining quantity) so FIFO `match_lots` realizes the correct cost basis (plan 0005, gap 0008). |
+| `CorporateAction` / `ActionId` | `CORPORATE_ACTION_WIRE_VERSION = 2`. `Split`, `Bonus`, `Dividend` (rupee `Money` per share), and `Demerger` — every variant carries a required `instrument: InstrumentId` (no serde default) and deterministic SHA-256 `ActionId`. Aggregate helpers and `AccountState::apply_corporate_actions_to_lots` filter strictly by `instrument == *action.instrument()` and `entry_date < action.ex_date()`, deduplicate via `AccountState::applied_corporate_actions`, and allocate collision-free `{lot_id}:DM:{action_id}` demerger lot IDs (plan 0006, gap 0014). |
 | `settle_trades` | Trade-based T+1 settlement across a `PortfolioState` (cash movements, position changes). |
 | `compute_capital_gains` / `CapitalGainType` / `TaxSummary` | FIFO capital gains with holding-period awareness; `TaxSummary::from_fills` builds a period summary applying corporate actions before FIFO cost basis. |
 
@@ -73,5 +74,7 @@ positions and marks always give a byte-identical snapshot.
   `match_lots` / `record_lot` to the `AccountState` aggregate.
 - `tantra-core/src/order.rs` — `FillReport` consumed as matching input.
 - `tantra-core/src/types.rs` — `Price`, `Quantity`, `Money`, `Currency`.
-- Tests: `apply_fill_tests.rs` (7), `clearing_calendar_injection_tests.rs` (6),
-  `unit_tests.rs` (23), plus `benches/portfolio_benchmarks.rs`.
+- Tests: `apply_fill_tests.rs` (7), `bracket_fifo_tests.rs` (5),
+  `clearing_calendar_injection_tests.rs` (7), `corporate_action_scoping_tests.rs` (7),
+  `per_lot_corporate_action_tests.rs` (10), `unit_tests.rs` (23), plus
+  `benches/portfolio_benchmarks.rs`.

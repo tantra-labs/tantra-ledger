@@ -10,10 +10,12 @@ tantra-core = { workspace = true }
 chrono = { workspace = true }
 rust_decimal = { workspace = true }
 serde = { workspace = true }
+sha2 = { workspace = true }
 
 [dev-dependencies]
 divan = "0.1"
 proptest = { workspace = true }
+serde_json = { workspace = true }
 
 [[bench]]
 name = "portfolio_benchmarks"

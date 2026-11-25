@@ -26,5 +26,5 @@
 
 ## Related
 
-- [0016](0016-oms-typestate-transitions.md), [0018](0018-journal-invariants-and-chart-of-accounts.md), [0014](0014-corporate-action-scoping.md) (applied-action ids), [0022](0022-bounded-state-and-snapshots.md).
+- [0016](0016-oms-typestate-transitions.md), [0018](0018-journal-invariants-and-chart-of-accounts.md), [0014 (closed)](README.md#closed-gaps) (applied-action ids), [0022](0022-bounded-state-and-snapshots.md).
 - Root plan 0022 (deployment architecture), root gap 0023 (tamper-evident audit trail). Root plan 0019 only lists unwired crates.

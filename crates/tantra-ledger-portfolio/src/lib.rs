@@ -31,7 +31,9 @@ use chrono::{DateTime, Datelike, NaiveDate, Utc, Weekday};
 use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use sha2::{Digest, Sha256};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::fmt;
 
 /// Re-export the canonical kernel vocabulary at the crate root so downstream
 /// gates import only this crate.
@@ -555,12 +557,85 @@ impl HeldPosition {
     }
 }
 
+/// Wire contract version for [`CorporateAction`] payloads (bumped to 2 when
+/// required `instrument: InstrumentId` scoping and rupee `Money` dividends
+/// replaced unscoped / `i64` paise payloads; see gap 0014).
+pub const CORPORATE_ACTION_WIRE_VERSION: u32 = 2;
+
+/// Deterministic SHA-256 identifier for a [`CorporateAction`], derived from
+/// `(instrument, kind, ex_date)` (and `new_instrument` for demergers).
+///
+/// Used by [`AccountState::applied_corporate_actions`] for idempotent
+/// application and by [`adjust_lot_for_demerger`] to build collision-free
+/// demerger lot IDs (`{lot_id}:DM:{action_id}`).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct ActionId(String);
+
+impl ActionId {
+    /// Derive the deterministic [`ActionId`] for a [`CorporateAction`].
+    pub fn from_action(action: &CorporateAction) -> Self {
+        let mut hasher = Sha256::new();
+        hasher.update(b"CA_V2:");
+        let inst = action.instrument();
+        hasher.update(inst.exchange().as_str().as_bytes());
+        hasher.update(b":");
+        hasher.update(inst.symbol().as_bytes());
+        hasher.update(b":");
+        match action {
+            CorporateAction::Split { ex_date, .. } => {
+                hasher.update(b"SPLIT:");
+                hasher.update(ex_date.to_string().as_bytes());
+            }
+            CorporateAction::Bonus { ex_date, .. } => {
+                hasher.update(b"BONUS:");
+                hasher.update(ex_date.to_string().as_bytes());
+            }
+            CorporateAction::Dividend { ex_date, .. } => {
+                hasher.update(b"DIVIDEND:");
+                hasher.update(ex_date.to_string().as_bytes());
+            }
+            CorporateAction::Demerger {
+                new_instrument,
+                ex_date,
+                ..
+            } => {
+                hasher.update(b"DEMERGER:");
+                hasher.update(ex_date.to_string().as_bytes());
+                hasher.update(b":");
+                hasher.update(new_instrument.exchange().as_str().as_bytes());
+                hasher.update(b":");
+                hasher.update(new_instrument.symbol().as_bytes());
+            }
+        }
+        Self(format!("{:x}", hasher.finalize()))
+    }
+
+    /// Borrow the canonical lowercase-hex digest string.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for ActionId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for ActionId {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
 /// Corporate action type for Indian equities.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CorporateAction {
     /// Stock split: e.g., 1:2 means 1 share becomes 2 shares, price halves
     /// ratio_numerator : ratio_denominator (e.g., 2:1 split = 2/1)
     Split {
+        instrument: InstrumentId,
         ratio_numerator: u64,
         ratio_denominator: u64,
         ex_date: NaiveDate,
@@ -568,14 +643,16 @@ pub enum CorporateAction {
     /// Bonus issue: e.g., 1:1 bonus means 1 free share for every 1 held
     /// Similar to split but no price change on ex-date (price adjusts by market)
     Bonus {
+        instrument: InstrumentId,
         ratio_numerator: u64,
         ratio_denominator: u64,
         ex_date: NaiveDate,
     },
-    /// Cash dividend per share (in paise/minor units)
+    /// Cash dividend per share (in major currency units, e.g. INR rupees)
     /// Does not affect position quantity, but generates cash income
     Dividend {
-        amount_per_share: i64, // minor units (paise)
+        instrument: InstrumentId,
+        amount_per_share: Money,
         ex_date: NaiveDate,
         record_date: NaiveDate,
         payment_date: NaiveDate,
@@ -583,6 +660,7 @@ pub enum CorporateAction {
     /// Demerger/spin-off: new instrument received proportionally
     /// allocation_ratio: how many new shares per old share (e.g., 1:1 = 1/1)
     Demerger {
+        instrument: InstrumentId,
         new_instrument: InstrumentId,
         allocation_numerator: u64,
         allocation_denominator: u64,
@@ -592,7 +670,17 @@ pub enum CorporateAction {
 }
 
 impl CorporateAction {
-    /// Get the ex-date of the corporate action
+    /// Target instrument affected by this corporate action.
+    pub fn instrument(&self) -> &InstrumentId {
+        match self {
+            CorporateAction::Split { instrument, .. }
+            | CorporateAction::Bonus { instrument, .. }
+            | CorporateAction::Dividend { instrument, .. }
+            | CorporateAction::Demerger { instrument, .. } => instrument,
+        }
+    }
+
+    /// Get the ex-date of the corporate action.
     pub fn ex_date(&self) -> NaiveDate {
         match self {
             CorporateAction::Split { ex_date, .. }
@@ -600,6 +688,11 @@ impl CorporateAction {
             | CorporateAction::Dividend { ex_date, .. }
             | CorporateAction::Demerger { ex_date, .. } => *ex_date,
         }
+    }
+
+    /// Deterministic identifier for idempotent application and demerger lot IDs.
+    pub fn action_id(&self) -> ActionId {
+        ActionId::from_action(self)
     }
 }
 
@@ -648,16 +741,17 @@ pub fn adjust_for_bonus(pos: &mut HeldPosition, ratio_numerator: u64, ratio_deno
     // FIFO lot IDs remain the same
 }
 
-/// Record a dividend payment.
+/// Record a dividend payment from a per-share `Money` distribution (e.g. INR rupees).
 /// Dividends don't affect position quantity or cost basis.
 /// Returns the dividend income amount for the given position quantity.
-pub fn record_dividend(pos: &HeldPosition, amount_per_share: i64) -> Money {
-    // Dividend income = amount_per_share * quantity (in minor units)
-    Money::inr(Decimal::from(amount_per_share) * pos.quantity.value())
+pub fn record_dividend(pos: &HeldPosition, amount_per_share: Money) -> Money {
+    let per_share = amount_per_share.amount.max(Decimal::ZERO);
+    Money::new(per_share * pos.quantity.value(), amount_per_share.currency)
 }
 
 /// Adjust position for a demerger/spin-off.
-/// Creates a new position for the spun-off instrument.
+/// Creates a new position for the spun-off instrument with collision-free
+/// `{lot_id}:DM:{action_id}` entry lot references.
 /// Original position's cost basis is split between old and new instruments.
 pub fn adjust_for_demerger(
     pos: &HeldPosition,
@@ -665,6 +759,7 @@ pub fn adjust_for_demerger(
     allocation_numerator: u64,
     allocation_denominator: u64,
     cost_basis_allocation_pct: Decimal,
+    action_id: &ActionId,
 ) -> Option<HeldPosition> {
     if allocation_numerator == 0 || allocation_denominator == 0 {
         return None;
@@ -692,7 +787,7 @@ pub fn adjust_for_demerger(
         entry_lot_ids: pos
             .entry_lot_ids
             .iter()
-            .map(|id| format!("DEMERGER_{id}"))
+            .map(|id| format!("{id}:DM:{action_id}"))
             .collect(),
         entry_date: pos.entry_date,
         realized_pnl: Money::inr(Decimal::ZERO),
@@ -738,7 +833,8 @@ pub fn adjust_lot_for_bonus(lot: &mut TaxLot, ratio_numerator: u64, ratio_denomi
         Price::try_new(lot.entry_price.value() / multiplier).expect("non-negative price");
 }
 
-/// Allocate a new demerged [`TaxLot`] out of an existing lot.
+/// Allocate a new demerged [`TaxLot`] out of an existing lot with a
+/// collision-free `{lot_id}:DM:{action_id}` identifier.
 ///
 /// For every `allocation_numerator / allocation_denominator` new shares per
 /// held share, a new lot is created for `new_instrument` whose quantity is
@@ -752,6 +848,7 @@ pub fn adjust_lot_for_demerger(
     allocation_numerator: u64,
     allocation_denominator: u64,
     cost_basis_allocation_pct: Decimal,
+    action_id: &ActionId,
 ) -> Option<TaxLot> {
     if allocation_numerator == 0 || allocation_denominator == 0 {
         return None;
@@ -763,7 +860,7 @@ pub fn adjust_lot_for_demerger(
         return None;
     }
     Some(TaxLot {
-        lot_id: format!("DEMERGER_{}", lot.lot_id),
+        lot_id: format!("{}:DM:{action_id}", lot.lot_id),
         account_id: lot.account_id.clone(),
         instrument: new_instrument,
         side: lot.side,
@@ -790,12 +887,17 @@ pub fn reduce_lot_for_demerger(lot: &mut TaxLot, cost_basis_allocation_pct: Deci
         Price::try_new(remaining_basis.max(Decimal::ZERO)).expect("non-negative price");
 }
 
-/// Apply a corporate action to a position.
+/// Apply a corporate action to a position when `pos.instrument` matches and
+/// `pos.entry_date < action.ex_date()`.
 /// Returns dividend income if applicable, and new position for demerger.
 pub fn apply_corporate_action(
     pos: &mut HeldPosition,
     action: &CorporateAction,
 ) -> (Money, Option<HeldPosition>) {
+    if pos.instrument != *action.instrument() || pos.entry_date >= action.ex_date() {
+        return (Money::inr(Decimal::ZERO), None);
+    }
+
     match action {
         CorporateAction::Split {
             ratio_numerator,
@@ -826,12 +928,14 @@ pub fn apply_corporate_action(
             cost_basis_allocation_pct,
             ..
         } => {
+            let action_id = action.action_id();
             let new_pos = adjust_for_demerger(
                 pos,
                 new_instrument.clone(),
                 *allocation_numerator,
                 *allocation_denominator,
                 *cost_basis_allocation_pct,
+                &action_id,
             );
             // Update original position's entry price for remaining cost basis
             // This is a simplified adjustment
@@ -846,18 +950,34 @@ pub fn apply_corporate_action(
     }
 }
 
-/// Apply all corporate actions that occurred before the given date to a position.
-/// Corporate actions are applied in chronological order.
+/// Apply all eligible corporate actions (`ex_date <= as_of`, matching
+/// instrument, and `pos.entry_date < ex_date`) to a position in
+/// chronological order, deduplicating within the batch by [`ActionId`].
 pub fn apply_corporate_actions_to_position(
     pos: &mut HeldPosition,
     actions: &[CorporateAction],
     as_of: NaiveDate,
 ) -> Money {
+    let mut ordered: Vec<&CorporateAction> = actions
+        .iter()
+        .filter(|a| {
+            a.ex_date() <= as_of
+                && pos.instrument == *a.instrument()
+                && pos.entry_date < a.ex_date()
+        })
+        .collect();
+    ordered.sort_by_key(|a| a.ex_date());
+
+    let mut seen = BTreeSet::new();
     let mut total_dividend_income = Money::inr(Decimal::ZERO);
 
-    for action in actions {
-        if action.ex_date() <= as_of {
-            let (dividend, _) = apply_corporate_action(pos, action);
+    for action in ordered {
+        let action_id = action.action_id();
+        if !seen.insert(action_id) {
+            continue;
+        }
+        let (dividend, _) = apply_corporate_action(pos, action);
+        if dividend.currency == total_dividend_income.currency {
             total_dividend_income = Money::inr(total_dividend_income.amount + dividend.amount);
         }
     }
@@ -865,19 +985,51 @@ pub fn apply_corporate_actions_to_position(
     total_dividend_income
 }
 
-/// Apply corporate actions to all positions in an account.
+/// Apply corporate actions to all eligible positions in an account
+/// idempotently (tracked via `account.applied_corporate_actions`).
 pub fn apply_corporate_actions_to_account(
     account: &mut AccountState,
     actions: &[CorporateAction],
     as_of: NaiveDate,
 ) -> Money {
-    let mut total_dividend_income = Money::inr(Decimal::ZERO);
+    let mut ordered: Vec<&CorporateAction> =
+        actions.iter().filter(|a| a.ex_date() <= as_of).collect();
+    ordered.sort_by_key(|a| a.ex_date());
 
-    for pos in &mut account.positions {
-        total_dividend_income = Money::inr(
-            total_dividend_income.amount
-                + apply_corporate_actions_to_position(pos, actions, as_of).amount,
-        );
+    let mut total_dividend_income = Money::new(Decimal::ZERO, account.cash.currency);
+
+    for action in ordered {
+        let action_id = action.action_id();
+        if account.applied_corporate_actions.contains(&action_id) {
+            continue;
+        }
+        if let CorporateAction::Dividend {
+            amount_per_share, ..
+        } = action
+            && amount_per_share.currency != account.cash.currency
+        {
+            continue;
+        }
+        let target_instrument = action.instrument();
+        let ex_date = action.ex_date();
+        let mut spawned_positions = Vec::new();
+        for pos in &mut account.positions {
+            if pos.instrument != *target_instrument || pos.entry_date >= ex_date {
+                continue;
+            }
+            let (dividend, new_pos) = apply_corporate_action(pos, action);
+            if dividend.currency == total_dividend_income.currency {
+                total_dividend_income = Money::new(
+                    total_dividend_income.amount + dividend.amount,
+                    total_dividend_income.currency,
+                );
+            }
+            if let Some(np) = new_pos {
+                spawned_positions.push(np);
+            }
+        }
+        account.positions.extend(spawned_positions);
+        account.applied_corporate_actions.insert(action_id);
     }
 
     total_dividend_income
@@ -899,14 +1051,16 @@ impl PortfolioState {
     }
 }
 
-/// Per-account aggregate state: cash, held positions, and the canonical FIFO
-/// tax-lot book.
+/// Per-account aggregate state: cash, held positions, the canonical FIFO
+/// tax-lot book, and the set of applied corporate actions.
 #[derive(Debug, Clone)]
 pub struct AccountState {
     pub cash: Money,
     pub positions: Vec<HeldPosition>,
     /// Canonical FIFO tax lots backing the positions.
     pub lots: Vec<TaxLot>,
+    /// Applied corporate action digests for strict idempotency on replay.
+    pub applied_corporate_actions: BTreeSet<ActionId>,
 }
 
 impl AccountState {
@@ -915,6 +1069,7 @@ impl AccountState {
             cash: Money::new(Decimal::ZERO, currency),
             positions,
             lots: Vec::new(),
+            applied_corporate_actions: BTreeSet::new(),
         }
     }
 
@@ -947,69 +1102,97 @@ impl AccountState {
         }
     }
 
-    /// Apply every applicable corporate action (ex-date `<= as_of`) directly
-    /// onto the FIFO [`TaxLot`] book, keeping the aggregate [`HeldPosition`]s
-    /// as a projection over the adjusted lots. Returns the total dividend
-    /// income accrued.
-    ///
-    /// This is the per-lot fix for gap 0008: split/bonus/demerger scale each
-    /// lot's `quantity`/`remaining_quantity`/`entry_price` so downstream
-    /// `match_lots` realizes the correct per-lot PnL, instead of only touching
-    /// the aggregate position. Dividends accrue from each lot's
-    /// `remaining_quantity` (the lot's current exposure).
+    /// Apply every applicable corporate action (`ex_date <= as_of`, matching
+    /// `lot.instrument`, and `lot.entry_date < ex_date`) directly onto the
+    /// FIFO [`TaxLot`] book, keeping [`HeldPosition`]s as a projection over
+    /// the adjusted lots. Each applied action is recorded in
+    /// [`AccountState::applied_corporate_actions`] so replaying actions across
+    /// ticks or restarts is a strict no-op. Returns total dividend income
+    /// accrued in account currency.
     pub fn apply_corporate_actions_to_lots(
         &mut self,
         actions: &[CorporateAction],
         as_of: NaiveDate,
     ) -> Money {
-        let mut total_dividend = Money::inr(Decimal::ZERO);
-        for action in actions {
-            if action.ex_date() > as_of {
+        let mut ordered: Vec<&CorporateAction> =
+            actions.iter().filter(|a| a.ex_date() <= as_of).collect();
+        ordered.sort_by_key(|a| a.ex_date());
+
+        let mut total_dividend = Money::new(Decimal::ZERO, self.cash.currency);
+        for action in ordered {
+            let action_id = action.action_id();
+            if self.applied_corporate_actions.contains(&action_id) {
                 continue;
             }
             match action {
                 CorporateAction::Split {
+                    instrument,
                     ratio_numerator,
                     ratio_denominator,
-                    ..
+                    ex_date,
                 } => {
                     for lot in &mut self.lots {
+                        if lot.instrument != *instrument || lot.entry_date >= *ex_date {
+                            continue;
+                        }
                         adjust_lot_for_split(lot, *ratio_numerator, *ratio_denominator);
                     }
                 }
                 CorporateAction::Bonus {
+                    instrument,
                     ratio_numerator,
                     ratio_denominator,
-                    ..
+                    ex_date,
                 } => {
                     for lot in &mut self.lots {
+                        if lot.instrument != *instrument || lot.entry_date >= *ex_date {
+                            continue;
+                        }
                         adjust_lot_for_bonus(lot, *ratio_numerator, *ratio_denominator);
                     }
                 }
                 CorporateAction::Dividend {
-                    amount_per_share, ..
+                    instrument,
+                    amount_per_share,
+                    ex_date,
+                    ..
                 } => {
+                    if amount_per_share.currency != self.cash.currency {
+                        continue;
+                    }
+                    let per_share = amount_per_share.amount.max(Decimal::ZERO);
                     for lot in &self.lots {
-                        let income =
-                            Decimal::from(*amount_per_share) * lot.remaining_quantity.value();
-                        total_dividend = Money::inr(total_dividend.amount + income);
+                        if lot.instrument != *instrument || lot.entry_date >= *ex_date {
+                            continue;
+                        }
+                        let income = per_share * lot.remaining_quantity.value();
+                        total_dividend =
+                            Money::new(total_dividend.amount + income, total_dividend.currency);
                     }
                 }
                 CorporateAction::Demerger {
+                    instrument,
                     new_instrument,
                     allocation_numerator,
                     allocation_denominator,
                     cost_basis_allocation_pct,
-                    ..
+                    ex_date,
                 } => {
                     let mut new_lots = Vec::new();
                     for lot in &mut self.lots {
+                        if lot.instrument != *instrument
+                            || lot.entry_date >= *ex_date
+                            || lot.is_exhausted()
+                        {
+                            continue;
+                        }
                         if let Some(new_lot) = adjust_lot_for_demerger(
                             lot,
                             new_instrument.clone(),
                             *allocation_numerator,
                             *allocation_denominator,
                             *cost_basis_allocation_pct,
+                            &action_id,
                         ) {
                             new_lots.push(new_lot);
                         }
@@ -1018,6 +1201,7 @@ impl AccountState {
                     self.lots.extend(new_lots);
                 }
             }
+            self.applied_corporate_actions.insert(action_id);
         }
         self.rebuild_positions_from_lots();
         total_dividend

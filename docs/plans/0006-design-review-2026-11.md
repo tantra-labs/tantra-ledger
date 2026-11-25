@@ -13,7 +13,7 @@ This plan makes the aggregates own their invariants (Phase A/B), then introduces
 
 | Gap | Title | Kind | Severity |
 |---|---|---|---|
-| [0014](../gaps/0014-corporate-action-scoping.md) | Corporate actions not scoped to an instrument, non-idempotent | design-flaw | critical |
+| ~~0014~~ | ~~Corporate actions not scoped to an instrument, non-idempotent~~ | design-flaw | ~~critical~~ ✅ closed 2026-11-25 ([`closed-gaps`](../gaps/README.md#closed-gaps)) |
 | [0015](../gaps/0015-apply-fill-ignores-side.md) | `apply_fill` ignores fill side | design-flaw | high |
 | [0016](../gaps/0016-oms-typestate-transitions.md) | OMS lifecycle runtime-checked only | design-flaw | high |
 | [0017](../gaps/0017-fill-dedup-exec-id.md) | No exec-id dedupe on fills | design-flaw | high |
@@ -32,7 +32,7 @@ Plan-only items (no standalone gap doc):
 ## 2. Component Specifications & Phases
 
 ### Phase A — Correctness fixes (small, test-first)
-1. **0014** — instrument-scoped, applied-set idempotent corporate actions (wire version bump).
+1. ~~**0014** — instrument-scoped, applied-set idempotent corporate actions (`CORPORATE_ACTION_WIRE_VERSION = 2`)~~ ✅ *(closed 2026-11-25)*.
 2. **0015** — `AccountState::apply_fill` owns open/add/reduce/reverse; coordinate removal of the backtest workaround and runtime call (`tantra-runtime`).
 3. **0021** — rounding policy and total-basis storage (after 0014, same functions).
 4. **R3** — `Quantity`-typed signatures, IST trade date, `pass_rate -> Decimal`, remove `expect`s.

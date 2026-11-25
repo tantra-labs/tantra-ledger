@@ -14,7 +14,6 @@ the remaining future work is enumerated below.
 
 | # | Title | Severity | Status | Plan |
 |---|-------|----------|--------|------|
-| [0014](0014-corporate-action-scoping.md) | Corporate actions not scoped to an instrument; non-idempotent | critical | open | [0006](../plans/0006-design-review-2026-11.md) |
 | [0015](0015-apply-fill-ignores-side.md) | `apply_fill` ignores the fill side (same-direction fill booked as close) | high | open | [0006](../plans/0006-design-review-2026-11.md) |
 | [0016](0016-oms-typestate-transitions.md) | OMS lifecycle runtime-checked only; mutators bypass `transition()` | high | open | [0006](../plans/0006-design-review-2026-11.md) |
 | [0017](0017-fill-dedup-exec-id.md) | No exec-id dedupe: replayed fills double-counted | high | open | [0006](../plans/0006-design-review-2026-11.md) |
@@ -28,6 +27,7 @@ the remaining future work is enumerated below.
 
 | # | Title | Closed In |
 |---|-------|-----------|
+| 0014 | Corporate actions not scoped to an instrument; non-idempotent | Closed 2026-11-25 (plan [0006](../plans/0006-design-review-2026-11.md)): added required `instrument: InstrumentId` to all `CorporateAction` variants (`CORPORATE_ACTION_WIRE_VERSION = 2`, no serde defaults), filtered lots/positions by `instrument` and `entry_date < ex_date`, added deterministic SHA-256 `ActionId` + `AccountState::applied_corporate_actions: BTreeSet<ActionId>` for strict idempotency, switched `Dividend.amount_per_share` & `record_dividend` to `Money` (major units, currency-checked), and used collision-free `{lot_id}:DM:{action_id}` demerger lot IDs; `corporate_action_scoping_tests` (7 incl. proptest), `per_lot_corporate_action_tests` (10), `unit_tests` (23), `apply_fill_tests` (7), `bracket_fifo_tests` (5), `clearing_calendar_injection_tests` (7). |
 | 0012 | No bracket-order (SL/TSL) OMS lifecycle — entry + SL/target child orders, TSL modify events, stop-trigger close (Elephant Edge EE+) | Closed 2026-11-17 (T12.7, `1e296d7`): `BracketOrder` aggregate + `BracketId` + `BracketEvent` (EntryFilled/StopMoved/PartialExit/StopTriggered/Closed) — `new` (stop-side validation), `on_entry_fill`, `apply_stop_update` (never-widen + qty ≤ open → `StopWidening`/`StopQtyExceedsOpen`), `on_partial_exit` (short-flip guard + FIFO target removal), `on_stop_trigger` (exact-Decimal realized PnL), `apply_fill_to_bracket` routing; `OmsSnapshot.open_brackets: Vec<BracketView>` (serde-defaulted); new `OrderError` variants. Tests `bracket_tests` (12) + `bracket_snapshot_tests` (4) + `bracket_proptest`; 55 passed. Follow-on: FIFO P&L realization via `portfolio.apply_fill` (oms crate has no portfolio dep yet). |
 | 0001 | Allocation `Hrp` objective declared but not implemented | plan 0003 — HRP solver (correlation-distance single linkage, quasi-diagonalization, recursive bisection), `2026-11-13` |
 | 0002 | Allocation `BlackLitterman` objective declared but not implemented | plan 0003 — `BlackLittermanViews`/`View` inputs + posterior blend, `2026-11-13` |

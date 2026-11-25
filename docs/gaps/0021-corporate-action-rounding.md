@@ -24,4 +24,4 @@ Positions with non-integral quantities leak into `Quantity` consumers that expec
 
 ## Related
 
-- [0014](0014-corporate-action-scoping.md) (same functions; land first), [0015](0015-apply-fill-ignores-side.md); root gap 0019 (corporate-action single source).
+- [0014 (closed)](README.md#closed-gaps) (same functions; land first), [0015](0015-apply-fill-ignores-side.md); root gap 0019 (corporate-action single source).

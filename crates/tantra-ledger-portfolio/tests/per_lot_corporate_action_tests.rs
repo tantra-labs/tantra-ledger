@@ -1,4 +1,4 @@
-//! Per-lot corporate-action cost-basis tests (gap 0008, plan 0005).
+//! Per-lot corporate-action cost-basis tests (gap 0008, plan 0005; updated gap 0014).
 //!
 //! The aggregate corporate-action helpers only adjust the aggregate
 //! `HeldPosition`; FIFO cost-basis integrity lives in the `TaxLot` book, so
@@ -11,7 +11,7 @@
 use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 use rust_decimal::Decimal;
 use tantra_core::{
-    AccountId, Currency, Exchange, InstrumentId, OrderSide, PositionSide, Price, Quantity,
+    AccountId, Currency, Exchange, InstrumentId, Money, OrderSide, PositionSide, Price, Quantity,
 };
 use tantra_ledger_portfolio::{
     AccountState, CorporateAction, LotFill, TaxLot, adjust_lot_for_bonus, adjust_lot_for_demerger,
@@ -113,6 +113,15 @@ fn test_bonus_fractional_ratio() {
 #[test]
 fn test_demerger_splits_each_lot_basis_and_creates_new_lot() {
     let mut old = lot("L1", 100, "1000");
+    let demerger = CorporateAction::Demerger {
+        instrument: reliance(),
+        new_instrument: acme(),
+        allocation_numerator: 1,
+        allocation_denominator: 1,
+        cost_basis_allocation_pct: Decimal::new(40, 2),
+        ex_date: NaiveDate::from_ymd_opt(2026, 3, 1).unwrap(),
+    };
+    let action_id = demerger.action_id();
 
     // 1:1 allocation, 40% of the original basis moves to the new scrip.
     let new = adjust_lot_for_demerger(
@@ -121,11 +130,12 @@ fn test_demerger_splits_each_lot_basis_and_creates_new_lot() {
         1,
         1,
         Decimal::new(40, 2), // 0.40
+        &action_id,
     )
     .expect("new lot created");
 
     assert_eq!(new.instrument, acme());
-    assert_eq!(new.lot_id, "DEMERGER_L1");
+    assert_eq!(new.lot_id, format!("L1:DM:{action_id}"));
     assert_eq!(new.quantity, Quantity::from_u64(100));
     assert_eq!(new.remaining_quantity, Quantity::from_u64(100));
     // 1000 * 0.40 / 1 = 400
@@ -140,7 +150,16 @@ fn test_demerger_splits_each_lot_basis_and_creates_new_lot() {
 #[test]
 fn test_demerger_zero_allocation_yields_no_new_lot() {
     let old = lot("L1", 100, "1000");
-    let none = adjust_lot_for_demerger(&old, acme(), 0, 1, Decimal::new(40, 2));
+    let demerger = CorporateAction::Demerger {
+        instrument: reliance(),
+        new_instrument: acme(),
+        allocation_numerator: 0,
+        allocation_denominator: 1,
+        cost_basis_allocation_pct: Decimal::new(40, 2),
+        ex_date: NaiveDate::from_ymd_opt(2026, 3, 1).unwrap(),
+    };
+    let action_id = demerger.action_id();
+    let none = adjust_lot_for_demerger(&old, acme(), 0, 1, Decimal::new(40, 2), &action_id);
     assert!(none.is_none());
 }
 
@@ -155,6 +174,7 @@ fn test_account_per_lot_split_then_fifo_match_uses_adjusted_basis() {
     acc.lots.push(lot("L2", 50, "800"));
 
     let split = CorporateAction::Split {
+        instrument: reliance(),
         ratio_numerator: 2,
         ratio_denominator: 1,
         ex_date: NaiveDate::from_ymd_opt(2026, 3, 1).unwrap(),
@@ -203,15 +223,16 @@ fn test_account_per_lot_dividend_accrues_from_remaining_quantity() {
     acc.lots.push(lot("L2", 50, "800"));
 
     let dividend = CorporateAction::Dividend {
-        amount_per_share: 500, // 500 paise = ₹5 per share
+        instrument: reliance(),
+        amount_per_share: Money::inr(Decimal::from(5)), // ₹5 per share
         ex_date: NaiveDate::from_ymd_opt(2026, 3, 1).unwrap(),
         record_date: NaiveDate::from_ymd_opt(2026, 3, 5).unwrap(),
         payment_date: NaiveDate::from_ymd_opt(2026, 3, 10).unwrap(),
     };
     let income = acc
         .apply_corporate_actions_to_lots(&[dividend], NaiveDate::from_ymd_opt(2026, 4, 1).unwrap());
-    // (100 + 50) * 500 paise = 75,000 paise.
-    assert_eq!(income.amount, Decimal::from(75_000));
+    // (100 + 50) * ₹5 = ₹750.
+    assert_eq!(income, Money::inr(Decimal::from(750)));
     // Dividend does not touch lot quantities or basis.
     assert_eq!(acc.lots[0].quantity, Quantity::from_u64(100));
     assert_eq!(acc.lots[0].entry_price, Price::from_rupees("1000").unwrap());
@@ -223,6 +244,7 @@ fn test_account_per_lot_demerger_creates_new_position_for_new_instrument() {
     acc.lots.push(lot("L1", 100, "1000"));
 
     let demerger = CorporateAction::Demerger {
+        instrument: reliance(),
         new_instrument: acme(),
         allocation_numerator: 1,
         allocation_denominator: 1,
@@ -254,6 +276,7 @@ fn test_account_lot_adjustment_skips_future_ex_dates() {
     acc.lots.push(lot("L1", 100, "1000"));
 
     let split = CorporateAction::Split {
+        instrument: reliance(),
         ratio_numerator: 2,
         ratio_denominator: 1,
         ex_date: NaiveDate::from_ymd_opt(2026, 6, 1).unwrap(),

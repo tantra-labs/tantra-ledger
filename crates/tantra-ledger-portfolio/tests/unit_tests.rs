@@ -8,7 +8,7 @@
 
 use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 use rust_decimal::Decimal;
-use tantra_core::{Currency, Exchange, InstrumentId};
+use tantra_core::{Currency, Exchange, InstrumentId, Money};
 use tantra_ledger_portfolio::{
     AccountState, CapitalGainType, ClearingCalendar, CorporateAction, DematHoldings, Fill,
     HeldPosition, Marks, PortfolioState, PositionSide, Price, Product, Quantity, SettlementEngine,
@@ -248,11 +248,11 @@ fn test_record_dividend() {
         Price::from_rupees("2000").unwrap(),
     );
 
-    // Dividend of 5 INR per share (500 paise)
-    let dividend = record_dividend(&pos, 500);
+    // Dividend of ₹5 per share
+    let dividend = record_dividend(&pos, Money::inr(Decimal::from(5)));
 
-    // 100 shares * 5 INR = 500 INR
-    assert_eq!(dividend.amount, Decimal::from(50000));
+    // 100 shares * ₹5 = ₹500 INR
+    assert_eq!(dividend, Money::inr(Decimal::from(500)));
 }
 
 #[test]
@@ -273,6 +273,7 @@ fn test_corporate_action_split_before_fill() {
 
     // Corporate action: 1:2 split on 2026-06-01 (ex-date)
     let actions = vec![CorporateAction::Split {
+        instrument: id.clone(),
         ratio_numerator: 2,
         ratio_denominator: 1,
         ex_date: NaiveDate::from_ymd_opt(2026, 6, 1).unwrap(),
@@ -305,7 +306,7 @@ fn test_corporate_action_split_before_fill() {
     // After 1:2 split: position qty = 20, entry_price = 1000
     // Selling 5 shares at 1100: PnL = 5 * (1100 - 1000) = 500 INR
     assert_eq!(tax_summary.total_sold_qty, 5);
-    assert!(tax_summary.total_realized_pnl.amount > Decimal::from(0));
+    assert_eq!(tax_summary.total_realized_pnl.amount, Decimal::from(500));
 }
 
 #[test]
@@ -326,6 +327,7 @@ fn test_corporate_action_bonus_before_fill() {
 
     // Corporate action: 1:1 bonus on 2026-06-01
     let actions = vec![CorporateAction::Bonus {
+        instrument: id.clone(),
         ratio_numerator: 1,
         ratio_denominator: 1,
         ex_date: NaiveDate::from_ymd_opt(2026, 6, 1).unwrap(),
@@ -358,7 +360,7 @@ fn test_corporate_action_bonus_before_fill() {
     // After 1:1 bonus: position qty = 20, entry_price = 1000
     // Selling 10 shares at 1100: PnL = 10 * (1100 - 1000) = 1000 INR
     assert_eq!(tax_summary.total_sold_qty, 10);
-    assert!(tax_summary.total_realized_pnl.amount > Decimal::from(0));
+    assert_eq!(tax_summary.total_realized_pnl.amount, Decimal::from(1000));
 }
 
 #[test]
@@ -377,9 +379,10 @@ fn test_corporate_action_dividend() {
 
     let state = single_account_state("acct1", acc);
 
-    // Corporate action: dividend of 10 INR per share on 2026-06-01
+    // Corporate action: dividend of ₹10 per share on 2026-06-01
     let actions = vec![CorporateAction::Dividend {
-        amount_per_share: 1000, // 10 INR = 1000 paise
+        instrument: id.clone(),
+        amount_per_share: Money::inr(Decimal::from(10)),
         ex_date: NaiveDate::from_ymd_opt(2026, 6, 1).unwrap(),
         record_date: NaiveDate::from_ymd_opt(2026, 6, 15).unwrap(),
         payment_date: NaiveDate::from_ymd_opt(2026, 7, 1).unwrap(),
@@ -413,7 +416,7 @@ fn test_corporate_action_dividend() {
     // Position qty = 100, entry_price = 2000
     // Selling 50 shares at 2100: PnL = 50 * (2100 - 2000) = 5000 INR
     assert_eq!(tax_summary.total_sold_qty, 50);
-    assert!(tax_summary.total_realized_pnl.amount > Decimal::from(0));
+    assert_eq!(tax_summary.total_realized_pnl.amount, Decimal::from(5000));
 }
 
 #[test]
@@ -434,6 +437,7 @@ fn test_corporate_action_after_fill_not_applied() {
 
     // Corporate action: 1:2 split on 2026-07-01 (AFTER the fill)
     let actions = vec![CorporateAction::Split {
+        instrument: id.clone(),
         ratio_numerator: 2,
         ratio_denominator: 1,
         ex_date: NaiveDate::from_ymd_opt(2026, 7, 1).unwrap(),
@@ -467,7 +471,7 @@ fn test_corporate_action_after_fill_not_applied() {
     // Position qty = 10, entry_price = 2000
     // Selling 5 shares at 2100: PnL = 5 * (2100 - 2000) = 500 INR
     assert_eq!(tax_summary.total_sold_qty, 5);
-    assert!(tax_summary.total_realized_pnl.amount > Decimal::from(0));
+    assert_eq!(tax_summary.total_realized_pnl.amount, Decimal::from(500));
 }
 
 // ————————————————————————————————————————
