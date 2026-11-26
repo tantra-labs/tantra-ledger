@@ -5,6 +5,8 @@ use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
+use tantra_core::CoreError;
+
 use crate::{Currency, InstrumentId, Money, PositionSide, Price, Quantity};
 
 /// Strongly-typed identifier for a journal account — distinct from this repo's
@@ -161,9 +163,9 @@ pub struct ClosedTrade {
     pub quantity: Quantity,
     pub entry_price: Price,
     pub exit_price: Price,
-    /// Realized PnL for this matched lot (INR), gross of fees.
+    /// Realized PnL for this matched lot, gross of fees, in the trade's currency.
     pub realized_pnl: Money,
-    /// Fees paid on this trade (INR), default zero.
+    /// Fees paid on this trade, in the trade's currency (`realized_pnl`'s); default zero.
     pub fees: Money,
     pub holding_period_days: i64,
     pub is_long_term: bool,
@@ -194,7 +196,7 @@ impl ClosedTrade {
             entry_price: lot.entry_price,
             exit_price: lot.exit_price,
             realized_pnl: lot.realized_pnl,
-            fees: Money::zero_inr(),
+            fees: Money::zero(lot.realized_pnl.currency()),
             holding_period_days: lot.holding_period_days,
             is_long_term: lot.is_long_term,
             exit_date,
@@ -205,7 +207,23 @@ impl ClosedTrade {
 
     /// Net PnL for this trade: realized PnL minus fees.
     pub fn net_pnl(&self) -> Money {
-        Money::inr(self.realized_pnl.amount() - self.fees.amount())
+        Money::new(
+            self.realized_pnl.amount() - self.fees.amount(),
+            self.realized_pnl.currency(),
+        )
+    }
+
+    /// Currency of this trade (that of `realized_pnl`). A non-zero fee in a
+    /// different currency is a mismatch; a zero fee in any currency is accepted.
+    pub fn currency(&self) -> Result<Currency, CoreError> {
+        let currency = self.realized_pnl.currency();
+        if self.fees.currency() != currency && !self.fees.amount().is_zero() {
+            return Err(CoreError::CurrencyMismatch {
+                left: currency,
+                right: self.fees.currency(),
+            });
+        }
+        Ok(currency)
     }
 
     /// True if this trade is a win (net PnL strictly positive).
@@ -229,16 +247,16 @@ impl ClosedTrade {
         if self.is_win() {
             self.net_pnl()
         } else {
-            Money::zero_inr()
+            Money::zero(self.realized_pnl.currency())
         }
     }
 
     /// Gross loss contribution: absolute net PnL if negative, else zero.
     pub fn gross_loss(&self) -> Money {
         if self.is_loss() {
-            Money::inr(-self.net_pnl().amount())
+            Money::new(-self.net_pnl().amount(), self.realized_pnl.currency())
         } else {
-            Money::zero_inr()
+            Money::zero(self.realized_pnl.currency())
         }
     }
 
@@ -251,4 +269,24 @@ impl ClosedTrade {
         }
         Some(self.net_pnl().amount() / risk.amount())
     }
+}
+
+/// Common currency of a set of closed trades: `Currency::Inr` for an empty
+/// slice; otherwise every trade must share the first trade's currency.
+pub fn common_currency(trades: &[ClosedTrade]) -> Result<Currency, CoreError> {
+    let mut iter = trades.iter();
+    let Some(first_trade) = iter.next() else {
+        return Ok(Currency::Inr);
+    };
+    let first = first_trade.currency()?;
+    for trade in iter {
+        let other = trade.currency()?;
+        if other != first {
+            return Err(CoreError::CurrencyMismatch {
+                left: first,
+                right: other,
+            });
+        }
+    }
+    Ok(first)
 }

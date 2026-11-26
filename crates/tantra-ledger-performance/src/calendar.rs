@@ -10,8 +10,10 @@ use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use crate::Money;
-use crate::model::ClosedTrade;
+use tantra_core::CoreError;
+
+use crate::model::{ClosedTrade, common_currency};
+use crate::{Currency, Money};
 
 /// One day's PnL bucket in the calendar.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -28,17 +30,17 @@ pub struct DailyPnl {
 }
 
 impl DailyPnl {
-    pub fn new(date: NaiveDate) -> Self {
+    pub fn new(date: NaiveDate, currency: Currency) -> Self {
         Self {
             date,
-            net_pnl: Money::zero_inr(),
-            gross_pnl: Money::zero_inr(),
-            fees: Money::zero_inr(),
+            net_pnl: Money::zero(currency),
+            gross_pnl: Money::zero(currency),
+            fees: Money::zero(currency),
             trades: 0,
             wins: 0,
             losses: 0,
             breakevens: 0,
-            volume: Money::zero_inr(),
+            volume: Money::zero(currency),
         }
     }
 }
@@ -61,7 +63,12 @@ pub struct CalendarWeek {
 /// weeks for the given month (Vela calendar shape). Days outside the month
 /// that fall inside the month's first/last week are included as empty buckets
 /// so the UI can render a full weekly grid.
-pub fn build_calendar(trades: &[ClosedTrade], year: i32, month: u32) -> PnlCalendar {
+pub fn build_calendar(
+    trades: &[ClosedTrade],
+    year: i32,
+    month: u32,
+) -> Result<PnlCalendar, CoreError> {
+    let currency = common_currency(trades)?;
     let mut by_day: BTreeMap<NaiveDate, DailyPnl> = BTreeMap::new();
 
     // Month boundaries: [first, last] inclusive.
@@ -79,16 +86,18 @@ pub fn build_calendar(trades: &[ClosedTrade], year: i32, month: u32) -> PnlCalen
         }
         let bucket = by_day
             .entry(trade.exit_date)
-            .or_insert_with(|| DailyPnl::new(trade.exit_date));
+            .or_insert_with(|| DailyPnl::new(trade.exit_date, currency));
         let net = trade.net_pnl().amount();
-        bucket.net_pnl = Money::inr(bucket.net_pnl.amount() + net);
-        bucket.fees = Money::inr(bucket.fees.amount() + trade.fees.amount());
+        bucket.net_pnl = Money::new(bucket.net_pnl.amount() + net, currency);
+        bucket.fees = Money::new(bucket.fees.amount() + trade.fees.amount(), currency);
         bucket.trades += 1;
-        bucket.volume =
-            Money::inr(bucket.volume.amount() + trade.exit_price.value() * trade.quantity.value());
+        bucket.volume = Money::new(
+            bucket.volume.amount() + trade.exit_price.value() * trade.quantity.value(),
+            currency,
+        );
         if trade.is_win() {
             bucket.wins += 1;
-            bucket.gross_pnl = Money::inr(bucket.gross_pnl.amount() + net);
+            bucket.gross_pnl = Money::new(bucket.gross_pnl.amount() + net, currency);
         } else if trade.is_loss() {
             bucket.losses += 1;
         } else {
@@ -109,7 +118,7 @@ pub fn build_calendar(trades: &[ClosedTrade], year: i32, month: u32) -> PnlCalen
             by_day
                 .get(&cursor)
                 .cloned()
-                .unwrap_or_else(|| DailyPnl::new(cursor)),
+                .unwrap_or_else(|| DailyPnl::new(cursor, currency)),
         );
         day_index += 1;
         if day_index.is_multiple_of(7) {
@@ -124,39 +133,45 @@ pub fn build_calendar(trades: &[ClosedTrade], year: i32, month: u32) -> PnlCalen
         weeks.push(CalendarWeek { days: current_week });
     }
 
-    PnlCalendar { year, month, weeks }
+    Ok(PnlCalendar { year, month, weeks })
 }
 
 /// Aggregate closed trades into per-day buckets (no weekly layout).
-pub fn daily_pnl_buckets(trades: &[ClosedTrade]) -> BTreeMap<NaiveDate, DailyPnl> {
+pub fn daily_pnl_buckets(
+    trades: &[ClosedTrade],
+) -> Result<BTreeMap<NaiveDate, DailyPnl>, CoreError> {
+    let currency = common_currency(trades)?;
     let mut by_day: BTreeMap<NaiveDate, DailyPnl> = BTreeMap::new();
     for trade in trades {
         let bucket = by_day
             .entry(trade.exit_date)
-            .or_insert_with(|| DailyPnl::new(trade.exit_date));
+            .or_insert_with(|| DailyPnl::new(trade.exit_date, currency));
         let net = trade.net_pnl().amount();
-        bucket.net_pnl = Money::inr(bucket.net_pnl.amount() + net);
-        bucket.fees = Money::inr(bucket.fees.amount() + trade.fees.amount());
+        bucket.net_pnl = Money::new(bucket.net_pnl.amount() + net, currency);
+        bucket.fees = Money::new(bucket.fees.amount() + trade.fees.amount(), currency);
         bucket.trades += 1;
-        bucket.volume =
-            Money::inr(bucket.volume.amount() + trade.exit_price.value() * trade.quantity.value());
+        bucket.volume = Money::new(
+            bucket.volume.amount() + trade.exit_price.value() * trade.quantity.value(),
+            currency,
+        );
         if trade.is_win() {
             bucket.wins += 1;
-            bucket.gross_pnl = Money::inr(bucket.gross_pnl.amount() + net);
+            bucket.gross_pnl = Money::new(bucket.gross_pnl.amount() + net, currency);
         } else if trade.is_loss() {
             bucket.losses += 1;
         } else {
             bucket.breakevens += 1;
         }
     }
-    by_day
+    Ok(by_day)
 }
 
 /// Sum of fees across all trades (a Money total).
-pub fn total_fees(trades: &[ClosedTrade]) -> Money {
+pub fn total_fees(trades: &[ClosedTrade]) -> Result<Money, CoreError> {
+    let currency = common_currency(trades)?;
     let mut total = Decimal::ZERO;
     for trade in trades {
         total += trade.fees.amount();
     }
-    Money::inr(total)
+    Ok(Money::new(total, currency))
 }

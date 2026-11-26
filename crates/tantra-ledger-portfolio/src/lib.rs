@@ -397,8 +397,19 @@ impl SettlementEngine {
                 match self.settle_instruction(holdings, instr) {
                     Ok(cash_delta) => {
                         result.settled_count += 1;
-                        result.cash_flow =
-                            Money::inr(result.cash_flow.amount() + cash_delta.amount());
+                        // Currency-checked sum: the first settlement fixes the
+                        // currency; a later mismatch is recorded, not relabelled.
+                        // (Side effects already happened, so not counted failed.)
+                        if result.settled_count == 1 {
+                            result.cash_flow = cash_delta;
+                        } else {
+                            match result.cash_flow.checked_add(cash_delta) {
+                                Ok(sum) => result.cash_flow = sum,
+                                Err(e) => result
+                                    .errors
+                                    .push(format!("Trade {}: {}", instr.trade_id, e)),
+                            }
+                        }
                         result.securities_moved.push(instr.instrument.clone());
                     }
                     Err(e) => {

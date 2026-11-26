@@ -31,7 +31,7 @@ fn build_calendar_filters_by_month() {
         w(mar11(), "-5.00"),
         w(apr1(), "999.00"),
     ];
-    let cal = build_calendar(&trades, 2026, 3);
+    let cal = build_calendar(&trades, 2026, 3).unwrap();
     assert_eq!(cal.year, 2026);
     assert_eq!(cal.month, 3);
     // Only March trades appear with non-zero trade counts; the April trade is excluded.
@@ -59,7 +59,7 @@ fn build_calendar_aggregates_day_bucket() {
         w(mar10(), "-5.00"), // -50 net
         w(mar11(), "20.00"), // +200 net
     ];
-    let cal = build_calendar(&trades, 2026, 3);
+    let cal = build_calendar(&trades, 2026, 3).unwrap();
     let mar10_bucket = cal
         .weeks
         .iter()
@@ -79,7 +79,7 @@ fn build_calendar_aggregates_day_bucket() {
 #[test]
 fn build_calendar_breakeven_bucket() {
     let trades = vec![w(mar10(), "0.00")];
-    let cal = build_calendar(&trades, 2026, 3);
+    let cal = build_calendar(&trades, 2026, 3).unwrap();
     let b = cal
         .weeks
         .iter()
@@ -98,7 +98,7 @@ fn build_calendar_weekly_grid_chunks_by_seven() {
     let trades: Vec<_> = (1..=31)
         .map(|day| w(NaiveDate::from_ymd_opt(2026, 3, day).unwrap(), "1.00"))
         .collect();
-    let cal = build_calendar(&trades, 2026, 3);
+    let cal = build_calendar(&trades, 2026, 3).unwrap();
     assert!(!cal.weeks.is_empty());
     for week in &cal.weeks {
         assert!(week.days.len() <= 7);
@@ -111,7 +111,7 @@ fn build_calendar_weekly_grid_chunks_by_seven() {
 #[test]
 fn daily_pnl_buckets_sorted_by_date() {
     let trades = vec![w(mar11(), "1.00"), w(mar10(), "1.00")];
-    let buckets = daily_pnl_buckets(&trades);
+    let buckets = daily_pnl_buckets(&trades).unwrap();
     let mut dates: Vec<NaiveDate> = buckets.keys().copied().collect();
     dates.sort();
     assert_eq!(dates, vec![mar10(), mar11()]);
@@ -123,6 +123,6 @@ fn total_fees_sums_across_trades() {
     t1.fees = money("10.00");
     let mut t2 = w(mar11(), "-5.00");
     t2.fees = money("5.00");
-    let total = total_fees(&[t1, t2]);
+    let total = total_fees(&[t1, t2]).unwrap();
     assert_eq!(total, money("15.00"));
 }

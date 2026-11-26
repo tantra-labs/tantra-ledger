@@ -26,8 +26,10 @@ use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use crate::Money;
-use crate::model::ClosedTrade;
+use tantra_core::CoreError;
+
+use crate::model::{ClosedTrade, common_currency};
+use crate::{Currency, Money};
 
 /// Errors from the metrics engine.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -36,6 +38,8 @@ pub enum MetricsError {
     EquityCurveUnsorted,
     #[error("no closed trades in range")]
     NoClosedTrades,
+    #[error("closed trades mix currencies: {left} vs {right}")]
+    CurrencyMismatch { left: Currency, right: Currency },
 }
 
 /// The full performance-metrics payload, mirroring Vela's own
@@ -165,6 +169,29 @@ impl MetricsInput {
 /// deterministic: identical inputs produce identical metrics.
 pub fn compute_metrics(input: &MetricsInput) -> Result<PerformanceMetrics, MetricsError> {
     let trades = &input.closed_trades;
+    let currency = match common_currency(trades) {
+        Ok(c) => c,
+        Err(CoreError::CurrencyMismatch { left, right }) => {
+            return Err(MetricsError::CurrencyMismatch { left, right });
+        }
+        // `common_currency` only fails with `CurrencyMismatch`.
+        Err(_) => {
+            return Err(MetricsError::CurrencyMismatch {
+                left: Currency::Inr,
+                right: Currency::Inr,
+            });
+        }
+    };
+    if let Some((_, m)) = input
+        .equity_curve
+        .iter()
+        .find(|(_, m)| m.currency() != currency)
+    {
+        return Err(MetricsError::CurrencyMismatch {
+            left: currency,
+            right: m.currency(),
+        });
+    }
 
     let total_trades = trades.len() as u64;
     let closed_trades = total_trades;
@@ -270,12 +297,12 @@ pub fn compute_metrics(input: &MetricsInput) -> Result<PerformanceMetrics, Metri
         None
     };
 
-    let gross_pnl = Money::inr(gross_profit_amount);
-    let largest_win = Money::inr(largest_win_amount);
-    let largest_loss = Money::inr(largest_loss_amount);
-    let net_pnl = Money::inr(net_pnl_amount);
-    let fees = Money::inr(fees_amount);
-    let total_volume = Money::inr(total_volume_amount);
+    let gross_pnl = Money::new(gross_profit_amount, currency);
+    let largest_win = Money::new(largest_win_amount, currency);
+    let largest_loss = Money::new(largest_loss_amount, currency);
+    let net_pnl = Money::new(net_pnl_amount, currency);
+    let fees = Money::new(fees_amount, currency);
+    let total_volume = Money::new(total_volume_amount, currency);
 
     let (profit_factor, profit_factor_is_infinite) = if gross_loss_amount.is_zero() {
         if gross_profit_amount.is_zero() {
@@ -288,12 +315,18 @@ pub fn compute_metrics(input: &MetricsInput) -> Result<PerformanceMetrics, Metri
     };
 
     let avg_win = if wins > 0 {
-        Some(Money::inr(gross_profit_amount / Decimal::from(wins)))
+        Some(Money::new(
+            gross_profit_amount / Decimal::from(wins),
+            currency,
+        ))
     } else {
         None
     };
     let avg_loss = if losses > 0 {
-        Some(Money::inr(gross_loss_amount / Decimal::from(losses)))
+        Some(Money::new(
+            gross_loss_amount / Decimal::from(losses),
+            currency,
+        ))
     } else {
         None
     };
@@ -304,7 +337,10 @@ pub fn compute_metrics(input: &MetricsInput) -> Result<PerformanceMetrics, Metri
     };
 
     let expectancy = if total_trades > 0 {
-        Some(Money::inr(net_pnl_amount / Decimal::from(total_trades)))
+        Some(Money::new(
+            net_pnl_amount / Decimal::from(total_trades),
+            currency,
+        ))
     } else {
         None
     };
@@ -322,7 +358,7 @@ pub fn compute_metrics(input: &MetricsInput) -> Result<PerformanceMetrics, Metri
     };
 
     // Drawdown from the equity curve (running peak).
-    let (max_drawdown, max_drawdown_pct) = compute_drawdown(&input.equity_curve);
+    let (max_drawdown, max_drawdown_pct) = compute_drawdown(&input.equity_curve, currency);
 
     let recovery_factor = if let (Some(dd), Some(dd_pct)) = (&max_drawdown, &max_drawdown_pct) {
         if !dd.amount().is_zero() {
@@ -369,7 +405,7 @@ pub fn compute_metrics(input: &MetricsInput) -> Result<PerformanceMetrics, Metri
         current_streak,
         total_volume,
         avg_duration_ms,
-        max_drawdown: max_drawdown.unwrap_or_else(Money::zero_inr),
+        max_drawdown: max_drawdown.unwrap_or_else(|| Money::zero(currency)),
         max_drawdown_pct,
         recovery_factor,
         profit_concentration,
@@ -383,7 +419,10 @@ pub fn compute_metrics(input: &MetricsInput) -> Result<PerformanceMetrics, Metri
 /// Returns `(max_drawdown_amount, max_drawdown_pct)`. The drawdown at each
 /// point is `running_peak - equity`; the max drawdown is the largest such
 /// gap, and the pct is the gap divided by the peak at that point.
-fn compute_drawdown(curve: &[(NaiveDate, Money)]) -> (Option<Money>, Option<Decimal>) {
+fn compute_drawdown(
+    curve: &[(NaiveDate, Money)],
+    currency: Currency,
+) -> (Option<Money>, Option<Decimal>) {
     if curve.is_empty() {
         return (None, None);
     }
@@ -421,7 +460,7 @@ fn compute_drawdown(curve: &[(NaiveDate, Money)]) -> (Option<Money>, Option<Deci
     } else {
         Some(max_dd_pct)
     };
-    (Some(Money::inr(max_dd)), dd_pct)
+    (Some(Money::new(max_dd, currency)), dd_pct)
 }
 
 /// Compute the composite edge score (0-100) from the metrics.
