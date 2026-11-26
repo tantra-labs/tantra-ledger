@@ -167,7 +167,7 @@ fn test_position_repository_fifo_tax_lot_matching() {
         matched[0].entry_price,
         Price::from_rupees("3000.00").unwrap()
     );
-    assert_eq!(matched[0].realized_pnl.amount, Decimal::from(25_000));
+    assert_eq!(matched[0].realized_pnl.amount(), Decimal::from(25_000));
     assert!(matched[0].is_long_term);
 
     // Second matched lot (LOT_002)
@@ -177,13 +177,13 @@ fn test_position_repository_fifo_tax_lot_matching() {
         matched[1].entry_price,
         Price::from_rupees("3200.00").unwrap()
     );
-    assert_eq!(matched[1].realized_pnl.amount, Decimal::from(6_000));
+    assert_eq!(matched[1].realized_pnl.amount(), Decimal::from(6_000));
 
     // Position aggregate after matching
     let positions_after = repo.get_positions(&account).unwrap();
     assert_eq!(positions_after[0].quantity, Quantity::from_u64(30));
     assert_eq!(
-        positions_after[0].realized_pnl.amount,
+        positions_after[0].realized_pnl.amount(),
         Decimal::from(31_000) // 25000 + 6000
     );
 }
@@ -214,7 +214,7 @@ fn test_ledger_repository_posting_and_balance() {
     assert_eq!(tx_id, TransactionId::new("TX_DEPOSIT_001"));
 
     let cash_balance = repo.get_balance(&cash_acct).unwrap();
-    assert_eq!(cash_balance.amount, Decimal::from(1_000_000));
+    assert_eq!(cash_balance.amount(), Decimal::from(1_000_000));
 
     // 2. Unbalanced entry must be rejected
     let tx_unbalanced = JournalTransaction {
@@ -266,12 +266,12 @@ fn test_evaluate_risk_budget_and_sizing_integration() {
     let risk_pct = Decimal::new(1, 2); // 1% risk per trade = 0.01
     let budget = evaluate_risk_budget(&portfolio, risk_pct);
 
-    assert_eq!(budget.equity.amount, Decimal::from(500_000)); // free cash
+    assert_eq!(budget.equity.amount(), Decimal::from(500_000)); // free cash
     assert_eq!(budget.risk_pct, risk_pct);
 
     let max_notional = budget.max_position_notional.unwrap();
     // 25% of ₹6,50,000 = ₹1,62,500
-    assert_eq!(max_notional.amount, Decimal::from(162_500));
+    assert_eq!(max_notional.amount(), Decimal::from(162_500));
 
     // Dynamic sizing calculation integration with tantra-core::sizing
     let sizing_request = PositionSizingRequest::new(
@@ -295,7 +295,7 @@ fn test_evaluate_risk_budget_and_sizing_integration() {
     assert_eq!(sizing_result.quantity, Quantity::from_u64(108));
     assert!(sizing_result.capped_by_limit);
     assert_eq!(
-        sizing_result.allocated_notional.amount,
+        sizing_result.allocated_notional.amount(),
         Decimal::from(162_000) // 108 * 1500
     );
 }

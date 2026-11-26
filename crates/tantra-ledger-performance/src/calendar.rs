@@ -80,15 +80,15 @@ pub fn build_calendar(trades: &[ClosedTrade], year: i32, month: u32) -> PnlCalen
         let bucket = by_day
             .entry(trade.exit_date)
             .or_insert_with(|| DailyPnl::new(trade.exit_date));
-        let net = trade.net_pnl().amount;
-        bucket.net_pnl = Money::inr(bucket.net_pnl.amount + net);
-        bucket.fees = Money::inr(bucket.fees.amount + trade.fees.amount);
+        let net = trade.net_pnl().amount();
+        bucket.net_pnl = Money::inr(bucket.net_pnl.amount() + net);
+        bucket.fees = Money::inr(bucket.fees.amount() + trade.fees.amount());
         bucket.trades += 1;
         bucket.volume =
-            Money::inr(bucket.volume.amount + trade.exit_price.value() * trade.quantity.value());
+            Money::inr(bucket.volume.amount() + trade.exit_price.value() * trade.quantity.value());
         if trade.is_win() {
             bucket.wins += 1;
-            bucket.gross_pnl = Money::inr(bucket.gross_pnl.amount + net);
+            bucket.gross_pnl = Money::inr(bucket.gross_pnl.amount() + net);
         } else if trade.is_loss() {
             bucket.losses += 1;
         } else {
@@ -134,15 +134,15 @@ pub fn daily_pnl_buckets(trades: &[ClosedTrade]) -> BTreeMap<NaiveDate, DailyPnl
         let bucket = by_day
             .entry(trade.exit_date)
             .or_insert_with(|| DailyPnl::new(trade.exit_date));
-        let net = trade.net_pnl().amount;
-        bucket.net_pnl = Money::inr(bucket.net_pnl.amount + net);
-        bucket.fees = Money::inr(bucket.fees.amount + trade.fees.amount);
+        let net = trade.net_pnl().amount();
+        bucket.net_pnl = Money::inr(bucket.net_pnl.amount() + net);
+        bucket.fees = Money::inr(bucket.fees.amount() + trade.fees.amount());
         bucket.trades += 1;
         bucket.volume =
-            Money::inr(bucket.volume.amount + trade.exit_price.value() * trade.quantity.value());
+            Money::inr(bucket.volume.amount() + trade.exit_price.value() * trade.quantity.value());
         if trade.is_win() {
             bucket.wins += 1;
-            bucket.gross_pnl = Money::inr(bucket.gross_pnl.amount + net);
+            bucket.gross_pnl = Money::inr(bucket.gross_pnl.amount() + net);
         } else if trade.is_loss() {
             bucket.losses += 1;
         } else {
@@ -156,7 +156,7 @@ pub fn daily_pnl_buckets(trades: &[ClosedTrade]) -> BTreeMap<NaiveDate, DailyPnl
 pub fn total_fees(trades: &[ClosedTrade]) -> Money {
     let mut total = Decimal::ZERO;
     for trade in trades {
-        total += trade.fees.amount;
+        total += trade.fees.amount();
     }
     Money::inr(total)
 }

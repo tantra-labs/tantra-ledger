@@ -69,8 +69,8 @@ fn test_fifo_booked_against_oldest_lot_before_bracket_anchor() {
     let strict_fifo = (Decimal::from(1100) - Decimal::from(900)) * Decimal::from(100)
         + (Decimal::from(1050) - Decimal::from(1000)) * Decimal::from(300);
     assert_eq!(fifo_pnl, Money::inr(Decimal::from(35_000)));
-    assert_eq!(fifo_pnl.amount, strict_fifo);
-    assert_eq!(fifo_pnl.amount, Decimal::from(35_000));
+    assert_eq!(fifo_pnl.amount(), strict_fifo);
+    assert_eq!(fifo_pnl.amount(), Decimal::from(35_000));
 
     // Naive single-anchor (bracket entry 1000) audit P&L:
     //   (1100 − 1000) × 100 + (1050 − 1000) × 300 = 25,000
@@ -83,14 +83,14 @@ fn test_fifo_booked_against_oldest_lot_before_bracket_anchor() {
     // (fill − old_entry) × qty = (1000 − 900) × 100 = 10,000.
     let expected_diff = (Decimal::from(1000) - Decimal::from(900)) * Decimal::from(100);
     assert_eq!(expected_diff, Decimal::from(10_000));
-    assert_eq!(fifo_pnl.amount - naive, expected_diff);
+    assert_eq!(fifo_pnl.amount() - naive, expected_diff);
 
     // The whole position was consumed; quantity is zero and the side never flipped.
     assert_eq!(account.positions.len(), 1);
     assert_eq!(account.positions[0].quantity, Quantity::ZERO);
     assert_eq!(account.positions[0].side, PositionSide::Long);
     assert_eq!(
-        account.positions[0].realized_pnl.amount,
+        account.positions[0].realized_pnl.amount(),
         Decimal::from(35_000)
     );
 }
@@ -133,16 +133,16 @@ fn test_bracket_only_account_matches_naive_anchor_and_manual_loop() {
             qty.value().to_u64().expect("whole shares"),
             price,
         );
-        manual_pnl = Money::inr(manual_pnl.amount + realized.amount);
+        manual_pnl = Money::inr(manual_pnl.amount() + realized.amount());
     }
 
     assert_eq!(helper_pnl, manual_pnl);
-    assert_eq!(manual_pnl.amount, Decimal::from(20_000));
+    assert_eq!(manual_pnl.amount(), Decimal::from(20_000));
     // Naive single-anchor (bracket entry 1000): the only lot, so FIFO == naive.
     let naive = (Decimal::from(1100) - Decimal::from(1000)) * Decimal::from(100)
         + (Decimal::from(1050) - Decimal::from(1000)) * Decimal::from(200);
-    assert_eq!(helper_pnl.amount, naive);
-    assert_eq!(helper_pnl.amount, Decimal::from(20_000));
+    assert_eq!(helper_pnl.amount(), naive);
+    assert_eq!(helper_pnl.amount(), Decimal::from(20_000));
     assert_eq!(via_helper.positions[0].quantity, Quantity::ZERO);
 }
 
@@ -171,7 +171,7 @@ fn test_exit_quantity_clamped_to_available_position_never_flips() {
     ];
     let pnl = apply_bracket_exits(&mut account, &reliance(), PositionSide::Long, &exits);
 
-    assert_eq!(pnl.amount, Decimal::from(15_000));
+    assert_eq!(pnl.amount(), Decimal::from(15_000));
     assert_eq!(account.positions.len(), 1);
     assert_eq!(account.positions[0].quantity, Quantity::ZERO);
     assert_eq!(

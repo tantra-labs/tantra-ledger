@@ -54,7 +54,7 @@ fn test_fill_reduces_long() {
         4,
         Price::from_rupees("2015").unwrap(),
     );
-    assert!(pnl.amount > Decimal::from(0)); // 4 * (2015 - 2000) = 60 INR
+    assert!(pnl.amount() > Decimal::from(0)); // 4 * (2015 - 2000) = 60 INR
     // Position should now have 6 units
     let pos = &state.accounts["acct1"].positions[0];
     assert_eq!(pos.quantity.value(), Decimal::from(6));
@@ -81,7 +81,7 @@ fn test_fill_full_close_long() {
         10,
         Price::from_rupees("2050").unwrap(),
     );
-    assert!(pnl.amount > Decimal::from(0)); // 10 * (2050 - 2000) = 500 INR
+    assert!(pnl.amount() > Decimal::from(0)); // 10 * (2050 - 2000) = 500 INR
     // Position should now have 0 units
     let pos = &state.accounts["acct1"].positions[0];
     assert_eq!(pos.quantity.value(), Decimal::from(0));
@@ -145,7 +145,7 @@ fn test_compute_capital_gains_short_term() {
     let sale_date = NaiveDate::from_ymd_opt(2026, 4, 1).unwrap();
     let (pnl, gain_type) =
         compute_capital_gains(&pos, 5, Price::from_rupees("2000").unwrap(), sale_date);
-    assert!(pnl.amount > Decimal::from(0));
+    assert!(pnl.amount() > Decimal::from(0));
     // With ~91 days holding, should be short term
     assert!(matches!(gain_type, CapitalGainType::ShortTerm));
 }
@@ -192,7 +192,7 @@ fn test_tax_summary_from_fills() {
     );
 
     // Should have some realized PnL
-    assert!(tax_summary.total_realized_pnl.amount >= Decimal::from(0));
+    assert!(tax_summary.total_realized_pnl.amount() >= Decimal::from(0));
     assert!(tax_summary.period_end >= tax_summary.period_start);
 }
 
@@ -306,7 +306,7 @@ fn test_corporate_action_split_before_fill() {
     // After 1:2 split: position qty = 20, entry_price = 1000
     // Selling 5 shares at 1100: PnL = 5 * (1100 - 1000) = 500 INR
     assert_eq!(tax_summary.total_sold_qty, 5);
-    assert_eq!(tax_summary.total_realized_pnl.amount, Decimal::from(500));
+    assert_eq!(tax_summary.total_realized_pnl.amount(), Decimal::from(500));
 }
 
 #[test]
@@ -360,7 +360,7 @@ fn test_corporate_action_bonus_before_fill() {
     // After 1:1 bonus: position qty = 20, entry_price = 1000
     // Selling 10 shares at 1100: PnL = 10 * (1100 - 1000) = 1000 INR
     assert_eq!(tax_summary.total_sold_qty, 10);
-    assert_eq!(tax_summary.total_realized_pnl.amount, Decimal::from(1000));
+    assert_eq!(tax_summary.total_realized_pnl.amount(), Decimal::from(1000));
 }
 
 #[test]
@@ -416,7 +416,7 @@ fn test_corporate_action_dividend() {
     // Position qty = 100, entry_price = 2000
     // Selling 50 shares at 2100: PnL = 50 * (2100 - 2000) = 5000 INR
     assert_eq!(tax_summary.total_sold_qty, 50);
-    assert_eq!(tax_summary.total_realized_pnl.amount, Decimal::from(5000));
+    assert_eq!(tax_summary.total_realized_pnl.amount(), Decimal::from(5000));
 }
 
 #[test]
@@ -471,7 +471,7 @@ fn test_corporate_action_after_fill_not_applied() {
     // Position qty = 10, entry_price = 2000
     // Selling 5 shares at 2100: PnL = 5 * (2100 - 2000) = 500 INR
     assert_eq!(tax_summary.total_sold_qty, 5);
-    assert_eq!(tax_summary.total_realized_pnl.amount, Decimal::from(500));
+    assert_eq!(tax_summary.total_realized_pnl.amount(), Decimal::from(500));
 }
 
 // ————————————————————————————————————————
@@ -609,7 +609,7 @@ fn test_settlement_engine_create_instruction() {
     assert_eq!(instr.side, PositionSide::Long);
     assert_eq!(instr.quantity, Quantity::from_u64(10));
     assert_eq!(instr.product, Product::Delivery);
-    assert!(instr.cash_flow.amount < Decimal::ZERO); // Buyer pays
+    assert!(instr.cash_flow.amount() < Decimal::ZERO); // Buyer pays
 }
 
 #[test]
@@ -730,16 +730,16 @@ fn test_value_snapshot_is_deterministic_and_real() {
 
     let snap = value(&state, &marks);
     // Market value = 10 * 2015 = 20150; unrealized = 10 * (2015 - 2000) = 150.
-    assert_eq!(snap.totals.amount, Decimal::from(20150));
-    assert_eq!(snap.unrealized_pnl.amount, Decimal::from(150));
-    assert_eq!(snap.realized_pnl.amount, Decimal::ZERO);
+    assert_eq!(snap.totals.amount(), Decimal::from(20150));
+    assert_eq!(snap.unrealized_pnl.amount(), Decimal::from(150));
+    assert_eq!(snap.realized_pnl.amount(), Decimal::ZERO);
     assert_eq!(
-        snap.breakdown.get("RELIANCE").map(|m| m.amount),
+        snap.breakdown.get("RELIANCE").map(|m| m.amount()),
         Some(Decimal::from(20150))
     );
 
     // Same inputs, byte-identical snapshot — no clock, no I/O.
     let again = value(&state, &marks);
-    assert_eq!(again.totals.amount, snap.totals.amount);
-    assert_eq!(again.unrealized_pnl.amount, snap.unrealized_pnl.amount);
+    assert_eq!(again.totals.amount(), snap.totals.amount());
+    assert_eq!(again.unrealized_pnl.amount(), snap.unrealized_pnl.amount());
 }

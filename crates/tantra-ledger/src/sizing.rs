@@ -90,7 +90,7 @@ pub fn evaluate_risk_budget(portfolio: &Portfolio, risk_pct: Decimal) -> RiskBud
     let mut total_gross_exposure = Decimal::ZERO;
 
     for account in portfolio.state.accounts.values() {
-        total_cash += account.cash.amount;
+        total_cash += account.cash.amount();
         for pos in &account.positions {
             let leg_notional = pos.entry_price.value() * pos.quantity.value();
             total_open_notional += leg_notional;
@@ -127,15 +127,9 @@ pub fn evaluate_risk_budget(portfolio: &Portfolio, risk_pct: Decimal) -> RiskBud
     let max_portfolio_risk = (risk_pct * Decimal::from(5)).min(Decimal::ONE);
 
     RiskBudget {
-        equity: Money {
-            amount: free_equity,
-            currency,
-        },
+        equity: Money::new(free_equity, currency),
         risk_pct,
-        max_position_notional: Some(Money {
-            amount: max_position_notional_amount,
-            currency,
-        }),
+        max_position_notional: Some(Money::new(max_position_notional_amount, currency)),
         max_position_qty: None,
         max_portfolio_risk_pct: Some(max_portfolio_risk),
         min_lot_size: portfolio.min_lot_size,

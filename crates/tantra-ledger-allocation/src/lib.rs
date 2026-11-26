@@ -434,7 +434,7 @@ pub fn allocate_discrete(
     prices: &BTreeMap<InstrumentId, Price>,
     lot_sizes: &BTreeMap<InstrumentId, Quantity>,
 ) -> Result<BTreeMap<InstrumentId, Quantity>, AllocationError> {
-    let equity_amount = equity.amount;
+    let equity_amount = equity.amount();
     if equity_amount < Decimal::ZERO {
         return Err(AllocationError::InvalidArgument(
             "equity cannot be negative".into(),

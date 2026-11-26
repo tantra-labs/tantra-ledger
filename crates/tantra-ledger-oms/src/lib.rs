@@ -802,11 +802,11 @@ pub fn validate_order_against_context(
 
     if let Some(r) = risk
         && let Some(max_loss) = config.max_daily_loss
-        && r.today_pnl.amount < -max_loss.amount
+        && r.today_pnl.amount() < -max_loss.amount()
     {
         return Err(OrderError::DailyLossLimitExceeded {
-            today_pnl: r.today_pnl.amount,
-            max_loss: max_loss.amount,
+            today_pnl: r.today_pnl.amount(),
+            max_loss: max_loss.amount(),
         });
     }
 
@@ -860,7 +860,7 @@ pub fn validate_fill_report(
     if fill_quantity.value() <= Decimal::ZERO {
         return Err(OrderError::InvalidParameters);
     }
-    if commission.amount < Decimal::ZERO {
+    if commission.amount() < Decimal::ZERO {
         return Err(OrderError::InvalidParameters);
     }
     Ok(())

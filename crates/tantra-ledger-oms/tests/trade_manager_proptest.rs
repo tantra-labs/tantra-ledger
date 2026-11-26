@@ -102,7 +102,7 @@ proptest! {
         };
         let mut manager = TradeManager::new(&plan).unwrap();
         manager.on_entry_fill(plan.entry, plan.quantity, ts()).unwrap();
-        let risk_at_stake = plan.risk_at_stake.amount;
+        let risk_at_stake = plan.risk_at_stake.amount();
         let fill = plan.entry.value();
         let mut last_stop = manager.stop().value();
         let mut price = entry_d;

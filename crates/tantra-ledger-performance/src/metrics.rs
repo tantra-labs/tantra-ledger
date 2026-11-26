@@ -196,9 +196,9 @@ pub fn compute_metrics(input: &MetricsInput) -> Result<PerformanceMetrics, Metri
         std::collections::BTreeMap::new();
 
     for trade in trades {
-        let net = trade.net_pnl().amount;
+        let net = trade.net_pnl().amount();
         net_pnl_amount += net;
-        fees_amount += trade.fees.amount;
+        fees_amount += trade.fees.amount();
         total_volume_amount += trade.exit_price.value() * trade.quantity.value();
 
         if trade.is_win() {
@@ -299,7 +299,7 @@ pub fn compute_metrics(input: &MetricsInput) -> Result<PerformanceMetrics, Metri
     };
 
     let avg_win_loss_ratio = match (&avg_win, &avg_loss) {
-        (Some(w), Some(l)) if !l.amount.is_zero() => Some(w.amount / l.amount),
+        (Some(w), Some(l)) if !l.amount().is_zero() => Some(w.amount() / l.amount()),
         _ => None,
     };
 
@@ -325,8 +325,8 @@ pub fn compute_metrics(input: &MetricsInput) -> Result<PerformanceMetrics, Metri
     let (max_drawdown, max_drawdown_pct) = compute_drawdown(&input.equity_curve);
 
     let recovery_factor = if let (Some(dd), Some(dd_pct)) = (&max_drawdown, &max_drawdown_pct) {
-        if !dd.amount.is_zero() {
-            Some(net_pnl_amount / dd.amount)
+        if !dd.amount().is_zero() {
+            Some(net_pnl_amount / dd.amount())
         } else if dd_pct.is_zero() && !net_pnl_amount.is_zero() {
             // No drawdown but profitable → infinite recovery factor.
             None // represented as None; callers treat zero drawdown as infinite
@@ -396,12 +396,12 @@ fn compute_drawdown(curve: &[(NaiveDate, Money)]) -> (Option<Money>, Option<Deci
         }
     }
 
-    let mut running_peak = curve[0].1.amount;
+    let mut running_peak = curve[0].1.amount();
     let mut max_dd = Decimal::ZERO;
     let mut max_dd_pct = Decimal::ZERO;
 
     for (_date, equity) in curve {
-        let eq = equity.amount;
+        let eq = equity.amount();
         if eq > running_peak {
             running_peak = eq;
         }

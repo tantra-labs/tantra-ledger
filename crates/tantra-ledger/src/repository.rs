@@ -166,22 +166,22 @@ impl JournalTransaction {
 
         let mut total_debit = Decimal::ZERO;
         for leg in &self.debits {
-            if leg.amount.amount <= Decimal::ZERO {
+            if leg.amount.amount() <= Decimal::ZERO {
                 return Err(DomainError::Validation(
                     "Debit amount must be strictly positive".to_string(),
                 ));
             }
-            total_debit += leg.amount.amount;
+            total_debit += leg.amount.amount();
         }
 
         let mut total_credit = Decimal::ZERO;
         for leg in &self.credits {
-            if leg.amount.amount <= Decimal::ZERO {
+            if leg.amount.amount() <= Decimal::ZERO {
                 return Err(DomainError::Validation(
                     "Credit amount must be strictly positive".to_string(),
                 ));
             }
-            total_credit += leg.amount.amount;
+            total_credit += leg.amount.amount();
         }
 
         if total_debit != total_credit {
@@ -425,10 +425,10 @@ impl LedgerRepository for InMemoryLedgerRepository {
         tx.validate()?;
 
         for deb in &tx.debits {
-            *self.balances.entry(deb.account.clone()).or_default() += deb.amount.amount;
+            *self.balances.entry(deb.account.clone()).or_default() += deb.amount.amount();
         }
         for cred in &tx.credits {
-            *self.balances.entry(cred.account.clone()).or_default() -= cred.amount.amount;
+            *self.balances.entry(cred.account.clone()).or_default() -= cred.amount.amount();
         }
 
         self.transactions.push(tx.clone());
@@ -437,9 +437,6 @@ impl LedgerRepository for InMemoryLedgerRepository {
 
     fn get_balance(&self, account: &AccountCode) -> Result<Money, DomainError> {
         let bal = self.balances.get(account).copied().unwrap_or(Decimal::ZERO);
-        Ok(Money {
-            amount: bal,
-            currency: self.base_currency,
-        })
+        Ok(Money::new(bal, self.base_currency))
     }
 }

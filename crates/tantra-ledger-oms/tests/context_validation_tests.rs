@@ -257,7 +257,7 @@ fn test_snapshot_counters_are_maintained() {
     assert_eq!(snap.total_orders, 2);
     assert_eq!(snap.total_filled, 1);
     assert_eq!(snap.total_cancelled, 1);
-    assert_eq!(snap.total_commission.amount, Decimal::ZERO);
-    assert_eq!(snap.total_fees.amount, Decimal::ZERO);
-    assert_eq!(snap.today_pnl.amount, Decimal::ZERO);
+    assert_eq!(snap.total_commission.amount(), Decimal::ZERO);
+    assert_eq!(snap.total_fees.amount(), Decimal::ZERO);
+    assert_eq!(snap.today_pnl.amount(), Decimal::ZERO);
 }

@@ -39,7 +39,7 @@ fn test_short_position_realized_pnl_is_computed() {
         Price::from_rupees("1950").unwrap(),
     );
 
-    assert_eq!(pnl.amount, Decimal::from(500));
+    assert_eq!(pnl.amount(), Decimal::from(500));
     assert_eq!(pos.quantity.value(), Decimal::ZERO);
 }
 
@@ -61,7 +61,7 @@ fn test_short_position_partial_close_realized_pnl() {
     );
 
     // 4 * (2000 - 1950) = 200
-    assert_eq!(pnl.amount, Decimal::from(200));
+    assert_eq!(pnl.amount(), Decimal::from(200));
     // Remaining short quantity: 6
     assert_eq!(pos.quantity.value(), Decimal::from(6));
     assert_eq!(pos.side, PositionSide::Short);
@@ -86,7 +86,7 @@ fn test_short_position_realized_pnl_is_negative_on_loss() {
 
     // 10 * (2000 - 2050) = -500: a real loss must show as negative, not be
     // clamped to zero.
-    assert_eq!(pnl.amount, Decimal::from(-500));
+    assert_eq!(pnl.amount(), Decimal::from(-500));
 }
 
 /// Regression guard for the existing, already-correct Long partial-close
@@ -108,7 +108,7 @@ fn test_long_position_partial_close_pnl() {
     );
 
     // 4 * (2015 - 2000) = 60
-    assert_eq!(pnl.amount, Decimal::from(60));
+    assert_eq!(pnl.amount(), Decimal::from(60));
     assert_eq!(pos.quantity.value(), Decimal::from(6));
     assert_eq!(pos.side, PositionSide::Long);
 }
@@ -135,7 +135,7 @@ fn test_long_to_short_reversal_opens_new_short_leg() {
     // Only the closed 10 units are realized: 10 * (2100 - 2000) = 1000.
     // The other 5 units are NOT realized PnL -- they are the basis of the
     // new short leg.
-    assert_eq!(pnl.amount, Decimal::from(1000));
+    assert_eq!(pnl.amount(), Decimal::from(1000));
 
     // The position must have flipped to Short with the remaining 5 units,
     // entered at the fill price.
@@ -164,7 +164,7 @@ fn test_short_to_long_reversal_symmetric_case() {
     );
 
     // Closed 10 units: 10 * (2000 - 1900) = 1000.
-    assert_eq!(pnl.amount, Decimal::from(1000));
+    assert_eq!(pnl.amount(), Decimal::from(1000));
 
     assert_eq!(pos.side, PositionSide::Long);
     assert_eq!(pos.quantity.value(), Decimal::from(5));
@@ -190,7 +190,7 @@ fn test_long_full_close_exact_quantity_still_zeroes_out() {
         Price::from_rupees("2050").unwrap(),
     );
 
-    assert_eq!(pnl.amount, Decimal::from(500));
+    assert_eq!(pnl.amount(), Decimal::from(500));
     assert_eq!(pos.quantity.value(), Decimal::ZERO);
     assert_eq!(pos.side, PositionSide::Long);
 }

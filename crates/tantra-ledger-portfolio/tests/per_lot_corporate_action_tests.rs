@@ -181,7 +181,7 @@ fn test_account_per_lot_split_then_fifo_match_uses_adjusted_basis() {
     };
     let income =
         acc.apply_corporate_actions_to_lots(&[split], NaiveDate::from_ymd_opt(2026, 4, 1).unwrap());
-    assert_eq!(income.amount, Decimal::ZERO);
+    assert_eq!(income.amount(), Decimal::ZERO);
 
     // Lots adjusted: L1 = 200 @ 500, L2 = 100 @ 400.
     assert_eq!(acc.lots[0].quantity, Quantity::from_u64(200));
@@ -211,7 +211,7 @@ fn test_account_per_lot_split_then_fifo_match_uses_adjusted_basis() {
     assert_eq!(matched.len(), 1);
     assert_eq!(matched[0].lot_id, "L1");
     assert_eq!(matched[0].matched_quantity, Quantity::from_u64(150));
-    assert_eq!(matched[0].realized_pnl.amount, Decimal::from(15_000));
+    assert_eq!(matched[0].realized_pnl.amount(), Decimal::from(15_000));
     assert_eq!(acc.lots[0].remaining_quantity, Quantity::from_u64(50));
     assert_eq!(acc.lots[1].remaining_quantity, Quantity::from_u64(100));
 }
@@ -253,7 +253,7 @@ fn test_account_per_lot_demerger_creates_new_position_for_new_instrument() {
     };
     let income = acc
         .apply_corporate_actions_to_lots(&[demerger], NaiveDate::from_ymd_opt(2026, 4, 1).unwrap());
-    assert_eq!(income.amount, Decimal::ZERO);
+    assert_eq!(income.amount(), Decimal::ZERO);
 
     // Original lot keeps 60% basis; a DEMERGER lot for the new scrip exists.
     assert_eq!(acc.lots.len(), 2);

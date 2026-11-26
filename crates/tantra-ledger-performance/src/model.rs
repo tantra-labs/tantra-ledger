@@ -124,7 +124,7 @@ impl TradeAnnotation {
     /// True if the user has supplied a non-zero planned risk, making R-multiple
     /// computable for this trade.
     pub fn has_risk(&self) -> bool {
-        self.planned_risk.is_some_and(|r| !r.amount.is_zero())
+        self.planned_risk.is_some_and(|r| !r.amount().is_zero())
     }
 }
 
@@ -205,22 +205,22 @@ impl ClosedTrade {
 
     /// Net PnL for this trade: realized PnL minus fees.
     pub fn net_pnl(&self) -> Money {
-        Money::inr(self.realized_pnl.amount - self.fees.amount)
+        Money::inr(self.realized_pnl.amount() - self.fees.amount())
     }
 
     /// True if this trade is a win (net PnL strictly positive).
     pub fn is_win(&self) -> bool {
-        self.net_pnl().amount > Decimal::ZERO
+        self.net_pnl().amount() > Decimal::ZERO
     }
 
     /// True if this trade is a loss (net PnL strictly negative).
     pub fn is_loss(&self) -> bool {
-        self.net_pnl().amount < Decimal::ZERO
+        self.net_pnl().amount() < Decimal::ZERO
     }
 
     /// True if this trade is a breakeven (net PnL exactly zero).
     pub fn is_breakeven(&self) -> bool {
-        self.net_pnl().amount == Decimal::ZERO
+        self.net_pnl().amount() == Decimal::ZERO
     }
 
     /// Gross contribution: net PnL if positive, else zero (used for
@@ -236,7 +236,7 @@ impl ClosedTrade {
     /// Gross loss contribution: absolute net PnL if negative, else zero.
     pub fn gross_loss(&self) -> Money {
         if self.is_loss() {
-            Money::inr(-self.net_pnl().amount)
+            Money::inr(-self.net_pnl().amount())
         } else {
             Money::zero_inr()
         }
@@ -246,9 +246,9 @@ impl ClosedTrade {
     /// is set or the planned risk is zero.
     pub fn realized_r(&self) -> Option<Decimal> {
         let risk = self.annotation.planned_risk?;
-        if risk.amount.is_zero() {
+        if risk.amount().is_zero() {
             return None;
         }
-        Some(self.net_pnl().amount / risk.amount)
+        Some(self.net_pnl().amount() / risk.amount())
     }
 }

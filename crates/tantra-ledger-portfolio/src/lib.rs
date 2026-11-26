@@ -397,7 +397,8 @@ impl SettlementEngine {
                 match self.settle_instruction(holdings, instr) {
                     Ok(cash_delta) => {
                         result.settled_count += 1;
-                        result.cash_flow = Money::inr(result.cash_flow.amount + cash_delta.amount);
+                        result.cash_flow =
+                            Money::inr(result.cash_flow.amount() + cash_delta.amount());
                         result.securities_moved.push(instr.instrument.clone());
                     }
                     Err(e) => {
@@ -745,8 +746,11 @@ pub fn adjust_for_bonus(pos: &mut HeldPosition, ratio_numerator: u64, ratio_deno
 /// Dividends don't affect position quantity or cost basis.
 /// Returns the dividend income amount for the given position quantity.
 pub fn record_dividend(pos: &HeldPosition, amount_per_share: Money) -> Money {
-    let per_share = amount_per_share.amount.max(Decimal::ZERO);
-    Money::new(per_share * pos.quantity.value(), amount_per_share.currency)
+    let per_share = amount_per_share.amount().max(Decimal::ZERO);
+    Money::new(
+        per_share * pos.quantity.value(),
+        amount_per_share.currency(),
+    )
 }
 
 /// Adjust position for a demerger/spin-off.
@@ -977,8 +981,8 @@ pub fn apply_corporate_actions_to_position(
             continue;
         }
         let (dividend, _) = apply_corporate_action(pos, action);
-        if dividend.currency == total_dividend_income.currency {
-            total_dividend_income = Money::inr(total_dividend_income.amount + dividend.amount);
+        if dividend.currency() == total_dividend_income.currency() {
+            total_dividend_income = Money::inr(total_dividend_income.amount() + dividend.amount());
         }
     }
 
@@ -996,7 +1000,7 @@ pub fn apply_corporate_actions_to_account(
         actions.iter().filter(|a| a.ex_date() <= as_of).collect();
     ordered.sort_by_key(|a| a.ex_date());
 
-    let mut total_dividend_income = Money::new(Decimal::ZERO, account.cash.currency);
+    let mut total_dividend_income = Money::new(Decimal::ZERO, account.cash.currency());
 
     for action in ordered {
         let action_id = action.action_id();
@@ -1006,7 +1010,7 @@ pub fn apply_corporate_actions_to_account(
         if let CorporateAction::Dividend {
             amount_per_share, ..
         } = action
-            && amount_per_share.currency != account.cash.currency
+            && amount_per_share.currency() != account.cash.currency()
         {
             continue;
         }
@@ -1018,10 +1022,10 @@ pub fn apply_corporate_actions_to_account(
                 continue;
             }
             let (dividend, new_pos) = apply_corporate_action(pos, action);
-            if dividend.currency == total_dividend_income.currency {
+            if dividend.currency() == total_dividend_income.currency() {
                 total_dividend_income = Money::new(
-                    total_dividend_income.amount + dividend.amount,
-                    total_dividend_income.currency,
+                    total_dividend_income.amount() + dividend.amount(),
+                    total_dividend_income.currency(),
                 );
             }
             if let Some(np) = new_pos {
@@ -1118,7 +1122,7 @@ impl AccountState {
             actions.iter().filter(|a| a.ex_date() <= as_of).collect();
         ordered.sort_by_key(|a| a.ex_date());
 
-        let mut total_dividend = Money::new(Decimal::ZERO, self.cash.currency);
+        let mut total_dividend = Money::new(Decimal::ZERO, self.cash.currency());
         for action in ordered {
             let action_id = action.action_id();
             if self.applied_corporate_actions.contains(&action_id) {
@@ -1157,17 +1161,17 @@ impl AccountState {
                     ex_date,
                     ..
                 } => {
-                    if amount_per_share.currency != self.cash.currency {
+                    if amount_per_share.currency() != self.cash.currency() {
                         continue;
                     }
-                    let per_share = amount_per_share.amount.max(Decimal::ZERO);
+                    let per_share = amount_per_share.amount().max(Decimal::ZERO);
                     for lot in &self.lots {
                         if lot.instrument != *instrument || lot.entry_date >= *ex_date {
                             continue;
                         }
                         let income = per_share * lot.remaining_quantity.value();
                         total_dividend =
-                            Money::new(total_dividend.amount + income, total_dividend.currency);
+                            Money::new(total_dividend.amount() + income, total_dividend.currency());
                     }
                 }
                 CorporateAction::Demerger {
@@ -1326,7 +1330,8 @@ impl AccountState {
             .map(|m| m.matched_quantity.value())
             .sum();
         if total_matched > Decimal::ZERO {
-            let total_realized: Decimal = matched_lots.iter().map(|m| m.realized_pnl.amount).sum();
+            let total_realized: Decimal =
+                matched_lots.iter().map(|m| m.realized_pnl.amount()).sum();
             if let Some(pos) = self
                 .positions
                 .iter_mut()
@@ -1335,7 +1340,7 @@ impl AccountState {
                 pos.quantity =
                     Quantity::try_new((pos.quantity.value() - total_matched).max(Decimal::ZERO))
                         .expect("non-negative quantity");
-                pos.realized_pnl = Money::inr(pos.realized_pnl.amount + total_realized);
+                pos.realized_pnl = Money::inr(pos.realized_pnl.amount() + total_realized);
                 pos.updated_at = fill.timestamp;
             }
         }
@@ -1400,10 +1405,10 @@ pub fn value(state: &PortfolioState, marks: &Marks) -> PortfolioSnapshot {
             let market_value = Money::inr(market_price.value() * pos.quantity.value());
             let cost_basis = Money::inr(pos.entry_price.value() * pos.quantity.value());
 
-            totals = Money::inr(totals.amount + market_value.amount);
+            totals = Money::inr(totals.amount() + market_value.amount());
             total_unrealized =
-                Money::inr(total_unrealized.amount + market_value.amount - cost_basis.amount);
-            total_realized = Money::inr(total_realized.amount + pos.realized_pnl.amount);
+                Money::inr(total_unrealized.amount() + market_value.amount() - cost_basis.amount());
+            total_realized = Money::inr(total_realized.amount() + pos.realized_pnl.amount());
 
             *breakdown
                 .entry(pos.instrument.symbol().to_string())
@@ -1495,7 +1500,7 @@ pub fn apply_fill_to_account(
         Some(idx) => {
             let mut pos = account.positions[idx].clone();
             let realized = apply_fill(&mut pos, side, fill_qty, fill_price);
-            pos.realized_pnl = Money::inr(pos.realized_pnl.amount + realized.amount);
+            pos.realized_pnl = Money::inr(pos.realized_pnl.amount() + realized.amount());
             account.positions[idx] = pos;
             realized
         }
@@ -1563,7 +1568,7 @@ pub fn apply_bracket_exits(
             continue;
         };
         let realized = apply_fill_to_account(account, instrument.clone(), side, fill_qty, *price);
-        total = Money::inr(total.amount + realized.amount);
+        total = Money::inr(total.amount() + realized.amount());
     }
     total
 }
@@ -1647,7 +1652,7 @@ pub fn settle_trades(
                         let cash_entry = cash_movements
                             .entry(account_name.clone())
                             .or_insert_with(|| Money::inr(Decimal::ZERO));
-                        *cash_entry = Money::inr(cash_entry.amount + proceeds.amount);
+                        *cash_entry = Money::inr(cash_entry.amount() + proceeds.amount());
 
                         // Reduce position quantity
                         if let Some(p) = account.positions.get_mut(idx) {
@@ -1668,7 +1673,7 @@ pub fn settle_trades(
                         let cash_entry = cash_movements
                             .entry(account_name.clone())
                             .or_insert_with(|| Money::inr(Decimal::ZERO));
-                        *cash_entry = Money::inr(cash_entry.amount - cost.amount);
+                        *cash_entry = Money::inr(cash_entry.amount() - cost.amount());
 
                         // Remove or reduce short position
                         if let Some(p) = account.positions.get_mut(idx) {
@@ -1691,7 +1696,7 @@ pub fn settle_trades(
                         let cash_entry = cash_movements
                             .entry(account_name.clone())
                             .or_insert_with(|| Money::inr(Decimal::ZERO));
-                        *cash_entry = Money::inr(cash_entry.amount - cost.amount);
+                        *cash_entry = Money::inr(cash_entry.amount() - cost.amount());
                     } else {
                         // Seller receives cash
                         let proceeds =
@@ -1699,7 +1704,7 @@ pub fn settle_trades(
                         let cash_entry = cash_movements
                             .entry(account_name.clone())
                             .or_insert_with(|| Money::inr(Decimal::ZERO));
-                        *cash_entry = Money::inr(cash_entry.amount + proceeds.amount);
+                        *cash_entry = Money::inr(cash_entry.amount() + proceeds.amount());
                     }
 
                     // Create position if buying
@@ -1822,15 +1827,15 @@ impl TaxSummary {
                 let (pnl, gain_type) =
                     compute_capital_gains(&pos, *fill_qty, *fill_price, *fill_date);
 
-                total_realized_pnl = Money::inr(total_realized_pnl.amount + pnl.amount);
+                total_realized_pnl = Money::inr(total_realized_pnl.amount() + pnl.amount());
                 total_sold_qty += *fill_qty;
 
                 match gain_type {
                     CapitalGainType::ShortTerm => {
-                        short_term_pnl = Money::inr(short_term_pnl.amount + pnl.amount);
+                        short_term_pnl = Money::inr(short_term_pnl.amount() + pnl.amount());
                     }
                     CapitalGainType::LongTerm => {
-                        long_term_pnl = Money::inr(long_term_pnl.amount + pnl.amount);
+                        long_term_pnl = Money::inr(long_term_pnl.amount() + pnl.amount());
                     }
                 }
             }
